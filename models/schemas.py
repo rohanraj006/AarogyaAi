@@ -39,6 +39,8 @@ class User(BaseModel):
     hashed_password: str
     aarogya_id: str
     user_type: str
+    patient_list: List[str] = [] # For doctors
+    doctor_list: List[str] = []  # For patients
 
 class UserCreate(BaseModel):
     email: str
@@ -54,7 +56,11 @@ class Report(BaseModel):
         allow_population_by_field_name = True
 
 class ConnectionRequest(BaseModel):
+    id:str = Field(alias="_id",default=None)
     doctor_email: str
     patient_email: str
     status: Literal["pending","accepted", "rejected"] = "pending"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    class Config:
+        allow_population_by_field_name = True
+    

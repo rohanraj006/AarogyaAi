@@ -1,7 +1,7 @@
 # ai_core/rag_engine.py
 
 import os
-import chromadb
+from pinecone import Pinecone
 from dotenv import load_dotenv
 import google.generativeai as genai
 from sentence_transformers import SentenceTransformer
@@ -18,35 +18,42 @@ except Exception as e:
     print(f"Error configuring Gemini: {e}")
     gemini_model = None
 
-# --- RAG Setup ---
-client = chromadb.PersistentClient(path="db")
-collection = client.get_collection(name="medical_knowledge")
+try:
+    pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    pc = Pinecone(api_key=pinecone_api_key)
+    pinecone_index = pc.Index("aarogya-knowledge-base")
+except Exception as e:
+    print(f"error config pinecone: {e}")
+    pinecone_index = None
+
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-
-# --- FUNCTION 1: Using Gemini for Patient Chat ---
+# --- FUNCTION 1: Using Gemini for Patient Chat (Now with Pinecone) ---
 def get_rag_response(query: str, user_email: str):
-    """
-    Handles patient chat using the Gemini API.
-    Uses personalized RAG context to inform its answers.
-    """
-    if not gemini_model:
-        return "Error: Gemini client is not configured."
+    if not gemini_model or not pinecone_index:
+        return "Error: AI clients are not configured."
 
-    results = collection.query(
-        query_embeddings=[embedding_model.encode(query).tolist()],
-        n_results=5,
-        where={"owner_email": user_email} 
+    # 1. Create a vector of the user's query
+    query_vector = embedding_model.encode(query).tolist()
+
+    # 2. Query Pinecone to find relevant context for that specific user
+    results = pinecone_index.query(
+        vector=query_vector,
+        top_k=3, # Get the top 3 most relevant text chunks
+        filter={"owner_email": user_email}
     )
     
     context = "No personal context found for this user."
-    if results and results['documents'] and results['documents'][0]:
-        context = "\n\n".join(results['documents'][0])
+    if results and results['matches']:
+        context = "\n\n".join([match['metadata']['text'] for match in results['matches']])
 
     prompt = f"""You are a friendly and empathetic medical AI assistant named Aarogya.
-Your goal is to answer the user's questions clearly and safely.
-Use your own knowledge, but you MUST prioritize the information from the user's personal documents in the "CONTEXT" section to tailor your response.
-Never provide direct medical advice. Always encourage the user to consult a doctor.
+
+Your instructions are:
+1.  Your primary goal is to answer the user's questions clearly, empathetically, and safely.
+2.  Use your own knowledge, but you MUST prioritize the information from the user's personal documents in the "CONTEXT" section to tailor your response.
+3.  If a user asks for a prescription or diagnosis (e.g., "What should I take for my headache?"), you MUST follow this procedure: offer a safe, non-medical suggestion and offer to contact a doctor. Your response should be very similar to this example: "I understand you're not feeling well, getting some rest can often help. Would you like me to notify a doctor about your symptoms?"
+4. suggest some home remedies.
 
 CONTEXT FROM USER'S DOCUMENTS:
 ---
@@ -55,12 +62,10 @@ CONTEXT FROM USER'S DOCUMENTS:
 
 USER'S QUESTION: {query}
 """
-
     try:
         response = gemini_model.generate_content(prompt)
         return response.text
     except Exception as e:
-        print(f"Error during Gemini API call: {e}")
         return "Sorry, I am having trouble connecting to the AI service right now."
 
 
