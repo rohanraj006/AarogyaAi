@@ -1,5 +1,6 @@
 # ai_core/rag_engine.py
 
+import json
 import os
 from pinecone import Pinecone
 from dotenv import load_dotenv
@@ -94,3 +95,56 @@ SUMMARY:"""
     except Exception as e:
         print(f"Error during Gemini API call: {e}")
         return "Sorry, there was an error communicating with the Gemini AI model."
+    
+def process_dictation(dictated_text: str):
+    """
+    Uses the Gemini API to convert unstructured doctor dictation into structured JSON data.
+    """
+    if not gemini_model:
+        return None
+
+    # This prompt forces the AI to output a structured JSON that aligns with the Pydantic schemas.
+    prompt = f"""You are a clinical documentation specialist AI. Your task is to extract all medical findings, diagnoses, and medication prescriptions from the following unstructured doctor's dictated notes.
+
+You MUST respond ONLY with a single JSON object that strictly adheres to the following format. Do not include any text outside the JSON block.
+
+JSON SCHEMA:
+{{
+  "diagnosis": [
+    {{
+      "condition": "string (e.g., Acute Bronchitis)",
+      "diagnosed_on": "string (ISO 8601 format, e.g., 2025-10-19T10:00:00Z). Use today's date if not specified.",
+      "notes": "string (Key findings related to this diagnosis)"
+    }}
+  ],
+  "medications": [
+    {{
+      "name": "string (e.g., Amoxicillin)",
+      "dosage": "string (e.g., 500mg)",
+      "frequency": "string (e.g., twice daily for 7 days)"
+    }}
+  ]
+}}
+
+DICTATED NOTES:
+---
+{dictated_text}
+---
+
+JSON OUTPUT:"""
+
+    try:
+        response = gemini_model.generate_content(prompt)
+        
+        # We assume the AI returns valid JSON string
+        json_string = response.text.strip()
+        
+        # Attempt to parse the JSON output
+        return json.loads(json_string)
+        
+    except json.JSONDecodeError as e:
+        print(f"AI returned invalid JSON: {response.text} Error: {e}")
+        return {"error": "AI failed to produce structured notes."}
+    except Exception as e:
+        print(f"Error during Gemini API call for dictation: {e}")
+        return {"error": "Sorry, the AI service is unavailable."}

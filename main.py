@@ -23,7 +23,7 @@ app.include_router(user_routes.router, prefix="/users", tags=["Users"])
 app.include_router(report_routes.router, prefix="/reports", tags=["Reports"])
 app.include_router(doctor_routes.router, prefix="/doctor", tags=["Doctor"])
 app.include_router(connection_routes.router, prefix="/connections", tags=["Connections"])
-app.include_router(admin_routes.router, prefic="/admin",tags=["Admin"])
+app.include_router(admin_routes.router, prefix="/admin",tags=["Admin"])
 app.include_router(appointment_routes.router, prefix="/appointments", tags=["Appointments"])
 
 @app.get("/")

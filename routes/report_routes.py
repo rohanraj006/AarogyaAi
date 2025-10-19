@@ -7,9 +7,9 @@ from typing import List
 from bson import ObjectId
 from fpdf import FPDF
 
-from models.schemas import User, Report
+from models.schemas import MedicalRecord, User, Report
 from security import get_current_user
-from database import reports_collection, user_collection
+from database import reports_collection, user_collection, medical_records_collection
 from ai_core.rag_engine import get_summary_response, pinecone_index, embedding_model
 
 
@@ -190,3 +190,40 @@ async def summarize_report(report_id: str, current_user: User = Depends(get_curr
     
     summary = get_summary_response(report_content)
     return {"filename": report['filename'], "summary": summary}
+
+@router.get("/patient/{patient_email}", response_model=List[Report], tags=["Reports"])
+async def get_patient_reports_for_doctor(patient_email: str, current_user: User = Depends(get_current_user)):
+    """Allows an authorized doctor to view the reports of a patient on their list."""
+    
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=403, detail="Access denied. Only doctors can view patient records.")
+    
+    if not current_user.is_authorized:
+        raise HTTPException(status_code=403, detail="You must be authorized by the platform owner to access patient records.")
+
+    # Check if the patient is on the doctor's approved list
+    if patient_email not in current_user.patient_list:
+        raise HTTPException(status_code=403, detail="Access denied. Patient is not connected to your account.")
+        
+    # Fetch reports for the specified patient
+    reports_cursor = reports_collection.find({"owner_email": patient_email}).sort("upload_date", -1)
+
+    # FIX: Convert MongoDB's ObjectId to a string before Pydantic validation
+    return [
+        Report(**{**report, "_id": str(report["_id"])}) 
+        for report in reports_cursor
+    ]
+
+@router.get("/my-structured-record", response_model=MedicalRecord, tags=["Reports"])
+async def get_my_structured_record(current_user: User = Depends(get_current_user)):
+    """Retrieves the patient's complete structured medical record (diagnoses and medications)."""
+    
+    # Check for the user's structured record
+    record = medical_records_collection.find_one({"owner_email": current_user.email})
+    
+    if not record:
+        # If no record exists, return an empty default MedicalRecord object
+        return MedicalRecord()
+        
+    # Pydantic validation handles the mapping from MongoDB dict to MedicalRecord model
+    return MedicalRecord(**record)

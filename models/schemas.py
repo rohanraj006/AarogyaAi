@@ -93,3 +93,8 @@ class AppointmentConfirmBody(BaseModel):
     """Schema for a doctor confirming an appointment request."""
     request_id: str
     appointment_time: datetime
+
+class DictationSaveBody(BaseModel):
+    """Schema for the doctor to send validated dictation data to be saved."""
+    patient_email: str
+    medical_record: MedicalRecord
