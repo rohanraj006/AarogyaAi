@@ -1,17 +1,25 @@
-from pymongo import MongoClient
+# database.py
+
+from motor.motor_asyncio import AsyncIOMotorClient 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
-MONGO_URI = os.getenv("MONGO_URI")
 
-client = MongoClient(MONGO_URI)
+MONGO_URI = os.getenv("MONGO_URI") 
+if not MONGO_URI:
+    raise ValueError("MONGO_URI not found in .env file.")
 
-db = client.aarogyadb
+
+client = AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+
+db = client.aarogyadb 
+
 user_collection = db.users
-
-chat_messages_collection = db.chat_messages #this stores the chat history
-reports_collection = db.reports #this stores the uploaded reports of the document
+sessions_collection = db.sessions 
+chat_messages_collection = db.chat_messages
+reports_collection = db.reports
 connection_requests_collection = db.connection_requests
 appointments_collection = db.appointments
 medical_records_collection = db.medical_records
+report_contents_collection = db.report_contents 

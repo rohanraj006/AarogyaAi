@@ -3,16 +3,18 @@
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
-from models.schemas import User, ConnectionRequest
-from security import get_current_user
-from database import user_collection, connection_requests_collection
+# UPDATED IMPORT: Use new session dependency
+from security import get_current_authenticated_user 
+from database import user_collection, connection_requests_collection # Motor collections
+# UPDATED IMPORT: Use rich schema name
+from models.schemas import User, ConnectionRequestModel
 
 router = APIRouter()
 
 @router.post("/request/{patient_aarogya_id}", status_code=status.HTTP_201_CREATED)
 async def request_connection(
     patient_aarogya_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_authenticated_user)
 ):
     """
     Allows a logged-in DOCTOR to send a connection request to a PATIENT.
@@ -23,41 +25,58 @@ async def request_connection(
             detail="Only doctors can send connection requests."
         )
     
+    # Check if the current doctor is authorized
     if not current_user.is_authorized:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You must be authorized by the platform owner to initiate patient connections."
         )
 
-    patient = user_collection.find_one({"aarogya_id": patient_aarogya_id})
+    # Use await for Motor
+    patient = await user_collection.find_one({"aarogya_id": patient_aarogya_id})
     if not patient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No patient found with AarogyaID: {patient_aarogya_id}"
         )
+    
+    # Ensure target is a patient
+    if patient.get("user_type") != "patient":
+         raise HTTPException(status_code=400, detail="Target AarogyaID must belong to a patient.")
 
-    existing_request = connection_requests_collection.find_one({
+
+    # Use await for Motor
+    existing_request = await connection_requests_collection.find_one({
         "doctor_email": current_user.email,
-        "patient_email": patient["email"]
+        "patient_email": patient["email"],
+        "$or": [{"status": "pending"}, {"status": "accepted"}] # Check both pending and accepted
     })
     if existing_request:
+        status_detail = existing_request["status"]
+        if status_detail == "accepted":
+            detail = "You are already connected with this patient."
+        else:
+            detail = "A pending connection request already exists."
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A connection request already exists or is already accepted."
+            detail=detail
         )
 
-    connection_data = ConnectionRequest(
+    # Use the new rich schema name and model_dump
+    connection_data = ConnectionRequestModel(
         doctor_email=current_user.email,
         patient_email=patient["email"]
     )
     
-    connection_requests_collection.insert_one(connection_data.dict())
+    # Use await for Motor
+    await connection_requests_collection.insert_one(connection_data.model_dump())
     
     return {"message": "Connection request sent successfully."}
 
 
-@router.get("/requests/pending", response_model=List[ConnectionRequest])
-async def get_pending_requests(current_user: User = Depends(get_current_user)):
+@router.get("/requests/pending", response_model=List[ConnectionRequestModel])
+async def get_pending_requests(current_user: User = Depends(get_current_authenticated_user)):
     """
     Allows a logged-in PATIENT to see a list of their pending connection requests.
     """
@@ -67,32 +86,37 @@ async def get_pending_requests(current_user: User = Depends(get_current_user)):
             detail="Only patients can view connection requests."
         )
 
+    # Use await for Motor and to_list
     requests_cursor = connection_requests_collection.find({
         "patient_email": current_user.email,
         "status": "pending"
     }).sort("timestamp", -1)
+    
+    requests_list = await requests_cursor.to_list(length=100)
 
-    # 1. Convert the MongoDB ObjectId to a string using the dictionary spread.
-    # 2. Use the **_id** key to ensure the ObjectId is correctly overwritten 
-    #    with its string representation before Pydantic validation occurs.
     return [
-        ConnectionRequest(**{**req, "_id": str(req["_id"])}) 
-        for req in requests_cursor
+        ConnectionRequestModel(**{**req, "_id": str(req["_id"])}) 
+        for req in requests_list
     ]
 
 @router.get("/requests/accept/{request_id}", status_code=status.HTTP_200_OK)
 async def accept_connection_request(
     request_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_authenticated_user)
 ):
     if current_user.user_type != "patient":
         raise HTTPException(
             status_code = status.HTTP_403_FORBIDDEN,
-            detail="on;y patients can accept request."
+            detail="Only patients can accept request."
         )
     
-    request_obj_id = ObjectId(request_id)
-    request = connection_requests_collection.find_one({
+    try:
+        request_obj_id = ObjectId(request_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request_id format.")
+
+    # Use await for Motor
+    request = await connection_requests_collection.find_one({
         "_id":request_obj_id,
         "patient_email": current_user.email,
         "status":"pending"
@@ -101,33 +125,39 @@ async def accept_connection_request(
     if not request:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="pending request not found"
+            detail="Pending request not found"
         )
-    connection_requests_collection.update_one(
+    
+    # Use await for Motor
+    await connection_requests_collection.update_one(
         {"_id": request_obj_id},
         {"$set": {"status": "accepted"}}
     )
+    
     doctor_email = request["doctor_email"]
     patient_email = current_user.email
-    user_collection.update_one(
+    
+    # Use await for Motor
+    await user_collection.update_one(
         {"email": doctor_email},
         {"$addToSet": {"patient_list": patient_email}}
     )
-    user_collection.update_one(
+    
+    # Use await for Motor
+    await user_collection.update_one(
         {"email": patient_email},
         {"$addToSet": {"doctor_list": doctor_email}}
     )
+    
     return {"message": "Connection request accepted successfully."}
 
 
-# --- THIS IS THE NEW "REJECT" ENDPOINT ---
 @router.post("/requests/reject/{request_id}", status_code=status.HTTP_200_OK)
 async def reject_connection_request(
     request_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_authenticated_user)
 ):
     """
-
     Allows a logged-in PATIENT to reject a connection request from a DOCTOR.
     """
     if current_user.user_type != "patient":
@@ -136,8 +166,13 @@ async def reject_connection_request(
             detail="Only patients can reject requests."
         )
     
-    request_obj_id = ObjectId(request_id)
-    request = connection_requests_collection.find_one({
+    try:
+        request_obj_id = ObjectId(request_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request_id format.")
+    
+    # Use await for Motor
+    request = await connection_requests_collection.find_one({
         "_id": request_obj_id,
         "patient_email": current_user.email,
         "status": "pending"
@@ -150,7 +185,8 @@ async def reject_connection_request(
         )
 
     # Simply update the status to "rejected"
-    connection_requests_collection.update_one(
+    # Use await for Motor
+    await connection_requests_collection.update_one(
         {"_id": request_obj_id},
         {"$set": {"status": "rejected"}}
     )
