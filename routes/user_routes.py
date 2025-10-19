@@ -61,19 +61,36 @@ async def register_doctor(user: UserCreate):
         "email": user.email,
         "hashed_password": hashed_password,
         "aarogya_id": new_id,
-        "user_type": "doctor"
+        "user_type": "doctor",
+        "is_public": False,      
+        "is_authorized": False
     }
     user_collection.insert_one(new_user_data)
     return new_user_data
 
 @router.post("/login", tags=["Users"])
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = user_collection.find_one({"email": form_data.username})
-    if not user or not verify_password(form_data.password, user["hashed_password"]):
+    user_data = user_collection.find_one({"email": form_data.username})
+    if not user_data or not verify_password(form_data.password, user_data["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = create_access_token(data={"sub": user["email"]})
+    token_data = {"sub": user_data["email"]}
+    
+    # NEW LOGIC: Include is_authorized status in the token for all subsequent checks
+    if user_data.get("user_type") == "doctor":
+        is_authorized = user_data.get("is_authorized", False)
+        
+        # We include the flag in the token
+        token_data["is_authorized"] = is_authorized
+        
+        # Optional: You can choose to provide a warning/message here, 
+        # but the actual feature blocking will happen in the appointment routes.
+        # if not is_authorized:
+        #     # You can add a response key here to inform the client
+        #     pass
+
+    access_token = create_access_token(data=token_data)
     return {"access_token": access_token, "token_type": "bearer"}

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, status, Query
 from models.schemas import User
 from security import get_current_user
 from database import user_collection
@@ -18,6 +18,12 @@ async def search_for_patient(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="access denied. ONly doctors can search for patients."
         )
+    
+    if not current_user.is_authorized:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You must be authorized by the platform owner to access patient features."
+            )
 
     patient = user_collection.find_one({
         "aarogya_id": aarogya_id,
@@ -33,3 +39,25 @@ async def search_for_patient(
         "aarogya_id":patient["aarogya_id"],
         "email":patient["email"]
     }
+
+@router.post("/toggle_public", tags=["Doctor"])
+async def doctor_toggle_public_status(
+    current_user: User = Depends(get_current_user), 
+    is_public: bool = Body(..., embed=True)
+):
+    """Allows an authorized doctor to set their profile visibility for the public directory."""
+    
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only doctors can manage their public status.")
+    
+    # Enforce Authorization Gate: Only authorized doctors can be public
+    if not current_user.is_authorized:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You must be authorized by the platform owner to be listed publicly.")
+
+    # Update the doctor's document in the database
+    user_collection.update_one(
+        {"email": current_user.email},
+        {"$set": {"is_public": is_public}}
+    )
+    
+    return {"message": f"Your public status has been set to {is_public}."}

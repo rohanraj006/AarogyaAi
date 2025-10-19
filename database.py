@@ -13,3 +13,4 @@ user_collection = db.users
 chat_messages_collection = db.chat_messages #this stores the chat history
 reports_collection = db.reports #this stores the uploaded reports of the document
 connection_requests_collection = db.connection_requests
+appointments_collection = db.appointments

@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 from typing import Literal
+from bson import ObjectId
 
 class Medication(BaseModel):
     name: str
@@ -41,6 +42,8 @@ class User(BaseModel):
     user_type: str
     patient_list: List[str] = [] # For doctors
     doctor_list: List[str] = []  # For patients
+    is_public: bool = False
+    is_authorized: bool = False
 
 class UserCreate(BaseModel):
     email: str
@@ -64,3 +67,29 @@ class ConnectionRequest(BaseModel):
     class Config:
         allow_population_by_field_name = True
     
+
+class DoctorInfo(BaseModel):
+    email: str
+    aarogya_id: str
+    is_public: bool
+    is_authorized: bool
+
+class AppointmentRequestModel(BaseModel):
+    id: str = Field(alias="_id", default=None)
+    patient_email: str
+    doctor_email: str 
+    reason: str
+    status: Literal["pending", "confirmed","rejected"]
+    meeting_link: Optional[datetime] = None
+    appointment_time: Optional[datetime]= None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        allow_population_by_field_name = True
+        # NEW: Ensure Pydantic can convert ObjectId to str for responses
+        json_encoders = {ObjectId: str} 
+
+class AppointmentConfirmBody(BaseModel):
+    """Schema for a doctor confirming an appointment request."""
+    request_id: str
+    appointment_time: datetime

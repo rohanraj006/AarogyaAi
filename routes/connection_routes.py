@@ -22,6 +22,12 @@ async def request_connection(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only doctors can send connection requests."
         )
+    
+    if not current_user.is_authorized:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be authorized by the platform owner to initiate patient connections."
+        )
 
     patient = user_collection.find_one({"aarogya_id": patient_aarogya_id})
     if not patient:
@@ -66,7 +72,13 @@ async def get_pending_requests(current_user: User = Depends(get_current_user)):
         "status": "pending"
     }).sort("timestamp", -1)
 
-    return [ConnectionRequest(**{**req, "id": str(req["_id"])}) for req in requests_cursor]
+    # 1. Convert the MongoDB ObjectId to a string using the dictionary spread.
+    # 2. Use the **_id** key to ensure the ObjectId is correctly overwritten 
+    #    with its string representation before Pydantic validation occurs.
+    return [
+        ConnectionRequest(**{**req, "_id": str(req["_id"])}) 
+        for req in requests_cursor
+    ]
 
 @router.get("/requests/accept/{request_id}", status_code=status.HTTP_200_OK)
 async def accept_connection_request(

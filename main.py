@@ -6,7 +6,7 @@ from typing import List
 
 # Import our tools and schemas
 from ai_core.rag_engine import get_rag_response
-from routes import user_routes, report_routes, doctor_routes, connection_routes
+from routes import user_routes, report_routes, doctor_routes, connection_routes, admin_routes,appointment_routes
 
 from security import get_current_user
 from models.schemas import User, ChatRequest, ChatMessage, ChatMessageBase
@@ -23,6 +23,9 @@ app.include_router(user_routes.router, prefix="/users", tags=["Users"])
 app.include_router(report_routes.router, prefix="/reports", tags=["Reports"])
 app.include_router(doctor_routes.router, prefix="/doctor", tags=["Doctor"])
 app.include_router(connection_routes.router, prefix="/connections", tags=["Connections"])
+app.include_router(admin_routes.router, prefic="/admin",tags=["Admin"])
+app.include_router(appointment_routes.router, prefix="/appointments", tags=["Appointments"])
+
 @app.get("/")
 def read_root():
     """This is the main endpoint of the API."""

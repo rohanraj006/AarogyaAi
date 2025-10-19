@@ -90,6 +90,12 @@ async def doctor_add_report(
     """Allows a connected doctor to add a new text-based report for a patient."""
     if current_user.user_type != "doctor":
         raise HTTPException(status_code=403, detail="Only doctors can add reports.")
+    
+    if current_user.user_type == "doctor" and not current_user.is_authorized:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be authorized by the platform owner to use the AI summarization feature."
+        )
 
     patient = user_collection.find_one({"email": patient_email})
     if not patient or patient_email not in current_user.patient_list:
@@ -171,6 +177,12 @@ async def summarize_report(report_id: str, current_user: User = Depends(get_curr
     report = reports_collection.find_one({"_id": ObjectId(report_id)})
     if not report or report["owner_email"] != current_user.email:
         raise HTTPException(status_code=404, detail="Report not found")
+    
+    if current_user.user_type == "doctor" and not current_user.is_authorized:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be authorized by the platform owner to use the AI summarization feature."
+        )
     
     report_content = report.get("content")
     if not report_content:
