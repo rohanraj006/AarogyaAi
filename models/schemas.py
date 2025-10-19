@@ -97,8 +97,9 @@ class Report(BaseModel):
     report_type: Optional[str] = None
     description: Optional[str] = None 
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {
+        'populate_by_name': True
+    }
 
 class MedicalRecord(BaseModel):
     # The primary structured medical data store
@@ -168,8 +169,9 @@ class ConnectionRequestModel(BaseModel):
     patient_email: str
     status: Literal["pending","accepted", "rejected"] = "pending"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {
+        'populate_by_name': True
+    }
 
 class DoctorInfo(BaseModel):
     email: str
