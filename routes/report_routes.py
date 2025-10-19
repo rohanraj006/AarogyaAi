@@ -12,14 +12,39 @@ from security import get_current_user
 from database import reports_collection, user_collection
 from ai_core.rag_engine import get_summary_response, pinecone_index, embedding_model
 
+
 router = APIRouter()
 
+# --- Improved Chunking Helper Function ---
+def get_chunks_with_overlap(text: str, chunk_size: int = 512, chunk_overlap: int = 50) -> List[str]:
+    """Splits text into chunks with a sliding window for better context continuity."""
+    if len(text) <= chunk_size:
+        return [text]
+
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk.strip())
+        
+        if end >= len(text):
+            break
+        
+        # Move start position back by overlap size for next chunk
+        start += chunk_size - chunk_overlap
+    
+    return chunks
+
+# --- Helper function for Pinecone ingestion, now using better chunking ---
 def ingest_text_to_pinecone(text: str, owner_email: str, filename: str):
     """Helper function to vectorize and upsert text to Pinecone."""
     if not text or not pinecone_index:
         return
 
-    chunks = [chunk.strip() for chunk in text.split('\n\n') if chunk.strip()]
+    # Using the more robust chunking strategy
+    chunks = get_chunks_with_overlap(text) 
+    
     if chunks:
         vectors = embedding_model.encode(chunks).tolist()
         metadata = [{"owner_email": owner_email, "filename": filename, "text": chunk} for chunk in chunks]
@@ -43,12 +68,15 @@ async def upload_report(
 
     ingest_text_to_pinecone(extracted_text, current_user.email, file.filename)
             
+    # Note: 'content' is not in your Pydantic Report schema, but it's used here and stored.
     report_data = Report(
         filename=file.filename,
         owner_email=current_user.email,
-        content=extracted_text 
     )
-    reports_collection.insert_one(report_data.dict(by_alias=True))
+    # Storing content in the MongoDB document directly, as done originally
+    doc_to_insert = report_data.dict(by_alias=True)
+    doc_to_insert["content"] = extracted_text 
+    reports_collection.insert_one(doc_to_insert)
     
     return {"message": f"Successfully uploaded and ingested {file.filename}."}
 
@@ -72,26 +100,44 @@ async def doctor_add_report(
     report_data = Report(
         filename=filename,
         owner_email=patient_email,
-        content=report_content
     )
-    reports_collection.insert_one(report_data.dict(by_alias=True))
+    doc_to_insert = report_data.dict(by_alias=True)
+    doc_to_insert["content"] = report_content 
+    reports_collection.insert_one(doc_to_insert)
 
     return {"message": f"Successfully added report for {patient_email}."}
 
 
 @router.get("/my-reports", response_model=List[Report])
 async def get_user_reports(current_user: User = Depends(get_current_user)):
-    reports = reports_collection.find({"owner_email": current_user.email}).sort("upload_date", -1)
-    return [Report(**report) for report in reports]
+    """
+    Retrieves all reports for the current user, fixing the ObjectId to string conversion.
+    """
+    reports_cursor = reports_collection.find({"owner_email": current_user.email}).sort("upload_date", -1)
+    
+    # FIX: Convert MongoDB's ObjectId to a string and assign it to the 'id' field
+    return [
+        Report(**{**report, "id": str(report["_id"])}) 
+        for report in reports_cursor
+    ]
 
 @router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_report(report_id: str, current_user: User = Depends(get_current_user)):
+    """
+    Deletes a report and all its associated vectors from Pinecone using a metadata filter.
+    """
     report = reports_collection.find_one({"_id": ObjectId(report_id)})
     if not report or report["owner_email"] != current_user.email:
         raise HTTPException(status_code=404, detail="Report not found")
     
-    ids_to_delete = [f"{report['owner_email']}_{report['filename']}_{i}" for i in range(100)] 
-    pinecone_index.delete(ids=ids_to_delete)
+    # EFFICIENT AND ACCURATE FIX: Delete by metadata filter
+    if pinecone_index:
+        pinecone_index.delete(
+            filter={
+                "owner_email": report['owner_email'],
+                "filename": report['filename']
+            }
+        )
     
     reports_collection.delete_one({"_id": ObjectId(report_id)})
     return

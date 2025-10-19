@@ -66,7 +66,7 @@ async def get_pending_requests(current_user: User = Depends(get_current_user)):
         "status": "pending"
     }).sort("timestamp", -1)
 
-    return [ConnectionRequest(**req) for req in requests_cursor]
+    return [ConnectionRequest(**{**req, "id": str(req["_id"])}) for req in requests_cursor]
 
 @router.get("/requests/accept/{request_id}", status_code=status.HTTP_200_OK)
 async def accept_connection_request(
