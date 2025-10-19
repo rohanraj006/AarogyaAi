@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from sentence_transformers import SentenceTransformer
 import asyncio
-from database import user_collection, medical_records_collection # Use Motor collections
+from database import user_collection, medical_records_collection, report_contents_collection # Use Motor collections
 from bson import ObjectId # Import ObjectId
 
 # Import the new service layer
