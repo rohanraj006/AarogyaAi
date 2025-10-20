@@ -67,7 +67,7 @@ async def register_patient(
         samesite="Lax"
     )
 
-    return new_user_data
+    return User.model_validate(new_user_data)
 
 @router.post("/register/doctor", response_model=User, status_code=status.HTTP_201_CREATED, tags=["Users"])
 async def register_doctor(
@@ -116,7 +116,7 @@ async def register_doctor(
         samesite="Lax"
     )
     
-    return new_user_data
+    return User.model_validate(new_user_data)
 
 @router.post("/login", tags=["Users"])
 async def login_for_access_token(
@@ -156,7 +156,7 @@ async def login_for_access_token(
         "is_authorized": user_data.get("is_authorized", False)
     }
 
-@router.post("/users/logout")
+@router.post("/logout")
 async def logout_user(response: Response):
     """
     Logs the user out by deleting the session cookie.
