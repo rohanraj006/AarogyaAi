@@ -1,12 +1,14 @@
 # main.py
 
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.staticfiles import StaticFiles 
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import List
 
 # Import our tools and schemas
 from ai_core.rag_engine import get_rag_response, get_summary_response # UPDATED: Import async services
-from routes import user_routes, report_routes, doctor_routes, connection_routes, admin_routes,appointment_routes
+from routes import user_routes, report_routes, doctor_routes, connection_routes, admin_routes,appointment_routes, ui_routes
 
 from security import get_current_authenticated_user # UPDATED: Use new session dependency
 from database import chat_messages_collection # Motor collection
@@ -18,7 +20,11 @@ app = FastAPI(
     version="0.1.0",
 )
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
 # Include all the different routers for our application (KEEP AS IS)
+app.include_router(ui_routes.router, prefix="", tags=["UI & Pages"])
 app.include_router(user_routes.router, prefix="/users", tags=["Users"])
 app.include_router(report_routes.router, prefix="/reports", tags=["Reports"])
 app.include_router(doctor_routes.router, prefix="/doctor", tags=["Doctor"])

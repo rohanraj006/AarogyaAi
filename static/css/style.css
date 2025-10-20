@@ -1,0 +1,44 @@
+/* Navbar Blur + Circular Logo */
+nav {
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 2rem;
+}
+
+.nav-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 0.5rem;
+}
+
+/* Hero background with slightly brighter gradient spots */
+.bg-gradient-spots {
+  background-color: #ffffff;
+  background-image: radial-gradient(circle at 20% 20%, rgba(128,0,255,0.08), transparent 50%),
+                    radial-gradient(circle at 80% 80%, rgba(0,128,255,0.08), transparent 50%);
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+/* Hero Logo */
+.hero-logo img {
+  border-radius: 2rem;
+  transition: all 0.3s ease;
+}
+
+/* Feature card hover */
+.feature-card:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+/* Remove main container stacking */
+section {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+}

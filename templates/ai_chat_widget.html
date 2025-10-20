@@ -1,0 +1,26 @@
+<div class="h-full flex flex-col">
+    <div class="bg-indigo-600 text-white p-3 flex justify-between items-center">
+        <h3 class="font-bold">Aarogya AI Assistant</h3>
+        <button class="text-white hover:text-gray-200" 
+                hx-on:click="document.getElementById('ai-chat-window').classList.add('hidden');">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+    
+    <div id="chat-messages" 
+         class="flex-grow p-3 overflow-y-auto space-y-3"
+         hx-get="/chat/history" 
+         hx-trigger="load, every 10s" 
+         hx-swap="innerHTML">
+        <div class="text-center text-gray-500 text-sm">Loading chat history...</div>
+    </div>
+
+    <form hx-post="/chat" 
+          hx-target="#chat-messages" 
+          hx-swap="beforeend scroll:bottom" 
+          hx-on::after-request="this.querySelector('input[name=query]').value=''">
+        <input type="text" name="query" placeholder="Ask Aarogya AI..." required
+               class="w-full p-3 border-t border-gray-300 focus:outline-none">
+        <input type="hidden" name="action" value="ask">
+    </form>
+</div>

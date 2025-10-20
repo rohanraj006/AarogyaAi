@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Home | Aarogya AI{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="home-hero flex items-center justify-between px-10 py-16 min-h-screen relative bg-gradient-spots">
+  <!-- Left Side: Hero Text -->
+  <div class="hero-text w-1/2 space-y-6">
+    <h1 class="text-5xl font-bold text-slate-900">
+      Empower Your Health with Aarogya AI
+    </h1>
+    <p class="text-lg text-slate-600">
+      Discover personalized health solutions powered by cutting-edge AI to transform your wellness journey.
+    </p>
+    <div class="flex gap-4 pt-4">
+      <a href="/appointments" class="btn-primary px-6 py-3 rounded-xl text-white text-lg">Book a Slot Now</a>
+      <a href="#features" class="btn-secondary px-6 py-3 rounded-xl text-lg">Learn More</a>
+    </div>
+  </div>
+
+  <!-- Right Side: Big Logo -->
+  <div class="hero-logo w-1/2 flex justify-center items-center">
+    <img src="{{ url_for('static', path='images/logo.jpg') }}" 
+         class="w-96 h-96 object-contain rounded-3xl" 
+         alt="Aarogya AI Logo">
+  </div>
+</section>
+
+<!-- Features Section -->
+<section id="features" class="py-20">
+  <div class="max-w-6xl mx-auto space-y-12">
+    <h2 class="text-4xl font-bold text-center text-slate-900">Why Choose Aarogya AI?</h2>
+    <div class="grid md:grid-cols-3 gap-8 mt-10">
+      <div class="feature-card p-6 rounded-xl shadow-md hover:shadow-xl transition transform hover:scale-105 cursor-pointer bg-white">
+        <h3 class="text-xl font-semibold text-slate-900">Personalized Health Plans</h3>
+        <p class="text-slate-600 mt-2">Customized wellness plans tailored to your unique health profile and lifestyle goals.</p>
+      </div>
+      <div class="feature-card p-6 rounded-xl shadow-md hover:shadow-xl transition transform hover:scale-105 cursor-pointer bg-white">
+        <h3 class="text-xl font-semibold text-slate-900">AI-Powered Insights</h3>
+        <p class="text-slate-600 mt-2">Advanced analytics provide actionable insights to optimize your health journey.</p>
+      </div>
+      <div class="feature-card p-6 rounded-xl shadow-md hover:shadow-xl transition transform hover:scale-105 cursor-pointer bg-white">
+        <h3 class="text-xl font-semibold text-slate-900">24/7 Expert Support</h3>
+        <p class="text-slate-600 mt-2">Round-the-clock access to health professionals for guidance and support.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Testimonials Section -->
+<section id="testimonials" class="py-20 bg-gray-50">
+  <div class="max-w-6xl mx-auto space-y-12">
+    <h2 class="text-4xl font-bold text-center text-slate-900">Voices of Our Community</h2>
+    <div class="grid md:grid-cols-2 gap-8 mt-10">
+      <div class="p-6 bg-white rounded-xl shadow-md hover:shadow-xl transition cursor-pointer">
+        <p class="text-slate-700 italic">"Aarogya AI gave me the tools to take charge of my health like never before. It's a game-changer!"</p>
+        <p class="mt-4 font-semibold text-slate-900">John Doe</p>
+        <p class="text-slate-500 text-sm">Satisfied Customer</p>
+      </div>
+      <div class="p-6 bg-white rounded-xl shadow-md hover:shadow-xl transition cursor-pointer">
+        <p class="text-slate-700 italic">"The personalized insights and constant support have made all the difference. Highly recommend!"</p>
+        <p class="mt-4 font-semibold text-slate-900">Jane Smith</p>
+        <p class="text-slate-500 text-sm">Happy User</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Call to Action Section -->
+<section class="py-20 bg-white text-center">
+  <h2 class="text-4xl font-bold text-slate-900">Ready to Transform Your Health?</h2>
+  <p class="mt-4 text-lg text-slate-600">Join thousands of users who are already experiencing the benefits of Aarogya AI's innovative health solutions.</p>
+  <a href="/users/register/patient" class="mt-6 inline-block btn-primary px-8 py-4 rounded-xl text-black text-lg">Get Started Today</a>
+</section>
+
+{% endblock %}
