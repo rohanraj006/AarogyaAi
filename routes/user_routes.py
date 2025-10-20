@@ -1,6 +1,6 @@
 # routes/user_routes.py
 
-from fastapi import APIRouter, HTTPException, status, Depends, Response, Request 
+from fastapi import APIRouter, HTTPException, status, Depends, Response, Request, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from models.schemas import User, UserCreate, SESSION_COOKIE_NAME, SESSION_EXPIRATION_MINUTES 
 from security import get_password_hash, verify_password, create_user_session
@@ -20,8 +20,14 @@ def generate_aarogya_id(user_type: Literal["patient", "doctor"]):
     return prefix +date_part+ random_part
 
 @router.post("/register/patient", response_model=User, status_code=status.HTTP_201_CREATED, tags=["Users"])
-async def register_patient(user: UserCreate, response: Response, request: Request): 
+async def register_patient(
+    response: Response, 
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...)
+): 
     """Registers a new patient and logs them in immediately."""
+    user = UserCreate(email=email, password=password) # Create the object from form data
     if await user_collection.find_one({"email": user.email}): 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
     
@@ -64,8 +70,14 @@ async def register_patient(user: UserCreate, response: Response, request: Reques
     return new_user_data
 
 @router.post("/register/doctor", response_model=User, status_code=status.HTTP_201_CREATED, tags=["Users"])
-async def register_doctor(user: UserCreate, response: Response, request: Request): 
+async def register_doctor(
+    response: Response, 
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...)
+): 
     """Registers a new doctor and logs them in immediately."""
+    user = UserCreate(email=email, password=password) # Create the object from form data
     if await user_collection.find_one({"email": user.email}):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
@@ -143,3 +155,15 @@ async def login_for_access_token(
         "user_type": user_type,
         "is_authorized": user_data.get("is_authorized", False)
     }
+
+@router.post("/users/logout")
+async def logout_user(response: Response):
+    """
+    Logs the user out by deleting the session cookie.
+    """
+    # The key is to tell the browser to delete the cookie.
+    # The cookie name ('session_token') must match the one you set during login.
+    response.delete_cookie(key="session_token")
+    
+    # You can return a success message...
+    return {"message": "Successfully logged out"}

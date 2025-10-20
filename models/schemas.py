@@ -119,7 +119,7 @@ class MedicalRecord(BaseModel):
 # --- 3. Updated User and Request Schemas ---
 
 class User(BaseModel):
-    # Combines Codebase 1's admin fields with Codebase 2's detailed patient fields
+    
     id: Optional[str] = Field(alias="_id", default=None)
     email: str
     hashed_password: str
@@ -140,6 +140,7 @@ class User(BaseModel):
     registration_date: Optional[datetime] = None
     date_of_birth: Optional[str] = None 
 
+    # Add this Config class
     class Config:
         allow_population_by_field_name = True
         json_encoders = {ObjectId: str}

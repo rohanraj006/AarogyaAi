@@ -126,4 +126,19 @@ async def get_current_authenticated_user(request: Request):
         )
 
     # Return the Pydantic User model instance
+    # security.py line 129
+    if '_id' in user_doc:
+        user_doc['_id'] = str(user_doc['_id'])
     return User(**user_doc)
+
+async def get_optional_user(request: Request) -> Optional[User]:
+    """
+    Returns the current authenticated user if a valid session token exists,
+    otherwise returns None. Does not raise an exception for unauthenticated users.
+    """
+    try:
+        # Tries to get the user, but catches the exception if they are not logged in
+        return await get_current_authenticated_user(request)
+    except HTTPException:
+        # This occurs when the user is not logged in or the token is invalid
+        return None

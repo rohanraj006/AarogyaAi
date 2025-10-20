@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Dashboard | Aarogya AI{% endblock %}
+
+{% block content %}
+<div class="bg-gray-50/50">
+  <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    
+    <div class="pb-8 border-b border-gray-200">
+      <h1 class="text-3xl font-bold text-gray-900">Welcome to your Dashboard</h1>
+      <p class="mt-2 text-lg text-gray-600">Here's a summary of your health journey with Aarogya AI.</p>
+    </div>
+
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+      <div class="lg:col-span-1 space-y-8">
+        
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">My Profile</h2>
+          <div class="mt-4 space-y-3 text-gray-700">
+            <p><strong>Email:</strong> <span class="text-gray-600">{{ user.email }}</span></p>
+            <p><strong>Aarogya ID:</strong> <span class="text-gray-600">{{ user.aarogya_id }}</span></p>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">Quick Actions</h2>
+          <div class="mt-4 space-y-4">
+            <a href="/appointments" class="block w-full text-center bg-indigo-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition transform hover:scale-105">
+              Book an Appointment
+            </a>
+            <a href="/reports" class="block w-full text-center bg-gray-700 text-white px-5 py-3 rounded-lg font-semibold hover:bg-gray-800 transition transform hover:scale-105">
+              Manage My Reports
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="lg:col-span-2">
+        <div class="bg-white p-6 rounded-2xl shadow-md min-h-full">
+          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">Recent Activity</h2>
+          <div class="mt-6 text-center text-gray-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="mt-4">Your recent appointments and report uploads will appear here.</p>
+            <p class="text-sm">No activity yet.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

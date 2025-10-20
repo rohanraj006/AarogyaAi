@@ -1,10 +1,9 @@
-/* Navbar Blur + Circular Logo */
+/* MODIFICATION: Updated nav rules to work with Tailwind classes */
 nav {
-  backdrop-filter: blur(10px);
-  background-color: rgba(255, 255, 255, 0.7);
-  display: flex;
-  align-items: center;
-  padding: 0.5rem 2rem;
+  /* Backdrop blur and background color are now handled by 
+    Tailwind's 'glass-card' class in base.html.
+    We can remove the old rules.
+  */
 }
 
 .nav-logo {
@@ -15,14 +14,7 @@ nav {
   margin-right: 0.5rem;
 }
 
-/* Hero background with slightly brighter gradient spots */
-.bg-gradient-spots {
-  background-color: #ffffff;
-  background-image: radial-gradient(circle at 20% 20%, rgba(128,0,255,0.08), transparent 50%),
-                    radial-gradient(circle at 80% 80%, rgba(0,128,255,0.08), transparent 50%);
-  background-repeat: no-repeat;
-  background-size: cover;
-}
+
 
 /* Hero Logo */
 .hero-logo img {
@@ -36,9 +28,70 @@ nav {
   box-shadow: 0 8px 20px rgba(0,0,0,0.15);
 }
 
-/* Remove main container stacking */
-section {
-  width: 100%;
-  max-width: none;
-  margin: 0 auto;
+/* MODIFICATION: Removed the old 'section' rule as it's no longer needed */
+
+
+/* MODIFICATION: This is the rule for the AI Chat Bubble logo */
+#openChatBtn {
+    background-image: url('../images/logo.jpg');
+    background-size: cover;
+    background-position: center;
+    border: 2px solid rgba(255, 255, 255, 0.8); /* Optional: A soft white border */
+}
+
+/* A Different Approach: Using Pseudo-elements for Background Circles */
+.home-hero {
+  position: relative; /* This is essential for positioning the circles */
+  overflow: hidden;   /* This prevents the circles from spilling out */
+}
+
+./* --- New Animation Code --- */
+
+/* 1. Define the animation keyframes */
+@keyframes pulse-fade {
+  0% {
+    opacity: 0.0; /* Start almost invisible */
+  }
+  50% {
+    opacity: 0.6; /* Fade in to 60% visibility */
+  }
+  100% {
+    opacity: 0.1; /* Fade back out */
+  }
+}
+
+/* 2. Apply the animation to the circles */
+.home-hero::before,
+.home-hero::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: 0;
+  /* Add the animation property */
+  animation: pulse-fade 5s infinite ease-in-out; /* 8-second loop, infinitely */
+}
+
+/* 3. (Optional but recommended) Add a delay to the second circle */
+.home-hero::after {
+  animation-delay: -3s; /* Starts the second circle halfway through the animation */
+}
+
+/* --- The existing circle styles --- */
+/* The Purple Circle */
+.home-hero::before {
+  width: 350px;
+  height: 350px;
+  background-color: rgba(192, 132, 252, 1); /* Opacity is now handled by the animation */
+  top: -100px;
+  left: -100px;
+}
+
+/* The Pink Circle */
+.home-hero::after {
+  width: 300px;
+  height: 300px;
+  background-color: rgba(244, 114, 182, 1); /* Opacity is now handled by the animation */
+  bottom: -100px;
+  right: -100px;
 }
