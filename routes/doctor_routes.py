@@ -125,13 +125,34 @@ async def search_for_patient(
     
     # Since the User schema is now detailed, we must extract only basic public fields
     # Use the embedded Name schema for a clean response
-    patient_name = Name(**patient["name"]).model_dump() if patient.get("name") else {"first": "N/A", "last": "N/A"}
-
+    if patient.get("name"):
+        patient_name = Name(**patient["name"]).model_dump()
+    else:
+        patient_name = {"first": patient["email"].split('@')[0], "last": ""}
     return{
         "aarogya_id": patient["aarogya_id"],
         "email": patient["email"],
         "name": patient_name
     }
+
+@router.get("/my-patients", response_model=List[User])
+async def get_my_patients(current_user: User = Depends(get_current_doctor)):
+    """
+    Fetches a list of patient User objects connected to the currently logged-in doctor.
+    """
+    if not current_user.patient_list:
+        return [] # Return an empty list if they have no patients
+
+    # Your connection routes store patient emails in the doctor's 'patient_list'
+    patients_cursor = user_collection.find({
+        "email": {"$in": current_user.patient_list},
+        "user_type": "patient"
+    })
+    
+    patient_list = await patients_cursor.to_list(length=None)
+
+    # Convert to Pydantic models for the response
+    return [User.model_validate(patient) for patient in patient_list]
 
 @router.post("/toggle_public", tags=["Doctor"])
 async def doctor_toggle_public_status(

@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from security import get_current_authenticated_user, get_optional_user
 # FIX 1: Import the User model for correct type hinting
-from model import User
+from models.schemas import User
 from typing import Optional, Dict, Any
 import datetime
 
@@ -51,6 +51,19 @@ async def register_patient_page(base_context: Dict[str, Any] = Depends(get_base_
     """Renders the patient registration form."""
     context = {"title": "Register as Patient", **base_context}
     return templates.TemplateResponse("register_patient.html", context)
+
+@router.get("/doctor/patients/search", response_class=HTMLResponse)
+async def search_patient_page(
+    request: Request,
+    current_user: User = Depends(get_current_authenticated_user),
+    base_context: Dict[str, Any] = Depends(get_base_template_context)
+):
+    """Renders the page where a doctor can search for a patient."""
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    
+    context = {"title": "Search for Patient", "user": current_user, **base_context}
+    return templates.TemplateResponse("search_patient.html", context)
 
 @router.get("/users/register/doctor", response_class=HTMLResponse)
 async def register_doctor_page(base_context: Dict[str, Any] = Depends(get_base_template_context)):

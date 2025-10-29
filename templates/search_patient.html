@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Search Patients{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <div class="pb-8 border-b border-gray-200">
+        <h1 class="text-3xl font-bold text-gray-900">Search for a Patient</h1>
+        <p class="mt-2 text-lg text-gray-600">Enter a patient's Aarogya ID to find their profile.</p>
+    </div>
+
+    <div class="mt-8 bg-white p-6 rounded-2xl shadow-md">
+        <form id="patientSearchForm" class="flex items-center space-x-4">
+            <div class="flex-grow">
+                <label for="aarogya_id" class="sr-only">Patient Aarogya ID</label>
+                <input type="text" name="aarogya_id" id="aarogya_id" required
+                       class="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                       placeholder="Enter Patient Aarogya ID (e.g., RP123456)">
+            </div>
+            <button type="submit"
+                    class="inline-flex justify-center py-3 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Search
+            </button>
+        </form>
+    </div>
+
+    <div id="search-results-container" class="mt-8">
+        </div>
+</div>
+{% endblock %}
