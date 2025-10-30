@@ -98,7 +98,7 @@ def create_report_pdf(doctor_info: dict, patient_info: dict, report_content_text
     buffer.seek(0) 
     return buffer
 
-@router.get("/patients/search")
+@router.get("/api/patients/search")
 async def search_for_patient(
     current_user: User = Depends(get_current_doctor), # Use the new doctor helper
     aarogya_id: str = Query(..., min_length=10, max_length=15)

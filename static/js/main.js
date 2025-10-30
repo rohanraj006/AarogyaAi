@@ -134,7 +134,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 didOpen: () => { Swal.showLoading(); }
             });
 
-            fetch(`/doctor/patients/search?aarogya_id=${aarogyaId}`)
+            fetch(`/doctor/api/patients/search?aarogya_id=${aarogyaId}`)
                 .then(response => {
                     if (!response.ok) { return response.json().then(err => { throw err; }); }
                     return response.json();
