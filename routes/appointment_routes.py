@@ -124,7 +124,7 @@ async def request_appointment(
         predicted_severity=predicted_severity # NEW FIELD
     )
     
-    await appointments_collection.insert_one(appointment_data.model_dump(by_alias=True))
+    await appointments_collection.insert_one(appointment_data.model_dump(by_alias=True,exclude_none=True))
     
     return {
         "message": "Appointment request sent successfully.", 

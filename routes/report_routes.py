@@ -93,7 +93,7 @@ async def upload_report(
         report_type=f"User Upload ({file.content_type.split('/')[-1].upper()})",
     )
     
-    await reports_collection.insert_one(report_data.model_dump(by_alias=True)) 
+    await reports_collection.insert_one(report_data.model_dump(by_alias=True,exclude_none=True)) 
     
     return {"message": f"Successfully uploaded and ingested {file.filename}."}
 
@@ -134,7 +134,7 @@ async def doctor_add_report(
         report_type="Doctor's Manual Note"
     )
 
-    await reports_collection.insert_one(report_data.model_dump(by_alias=True))
+    await reports_collection.insert_one(report_data.model_dump(by_alias=True,exclude_none=True))
 
     return {"message": f"Successfully added report for {patient_email}."}
 
@@ -148,10 +148,15 @@ async def get_user_reports(current_user: User = Depends(get_current_authenticate
     reports_list = await reports_cursor.to_list(length=100)
     
     # Attach content_id for subsequent calls
-    return [
-        Report(**{**report, "id": str(report["_id"]), "content_id": str(report.get("content_id"))}) 
-        for report in reports_list
-    ]
+    validated_reports = []
+    for report in reports_list:
+        if '_id' in report:
+            report['_id'] = str(report['_id'])
+        if 'content_id' in report and report['content_id'] is not None:
+             report['content_id'] = str(report['content_id'])
+        validated_reports.append(Report.model_validate(report))
+        
+    return validated_reports
 
 @router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_report(report_id: str, current_user: User = Depends(get_current_authenticated_user)):
@@ -261,9 +266,9 @@ async def summarize_report(report_id: str, current_user: User = Depends(get_curr
         
     return {"filename": report['filename'], "summary": summary}
 
-@router.get("/patient/{patient_email}", response_model=List[Report], tags=["Reports"])
-async def get_patient_reports_for_doctor(patient_email: str, current_user: User = Depends(get_current_authenticated_user)):
-    """Allows an authorized doctor to view the reports of a patient on their list."""
+@router.get("/patient-by-id/{patient_aarogya_id}", response_model=List[Report], tags=["Reports"])
+async def get_patient_reports_for_doctor(patient_aarogya_id: str, current_user: User = Depends(get_current_authenticated_user)):
+    """Allows an authorized doctor to view the reports of a patient on their list using Patient ID."""
     
     if current_user.user_type != "doctor":
         raise HTTPException(status_code=403, detail="Access denied. Only doctors can view patient records.")
@@ -271,16 +276,30 @@ async def get_patient_reports_for_doctor(patient_email: str, current_user: User 
     if not current_user.is_authorized:
         raise HTTPException(status_code=403, detail="You must be authorized by the platform owner to access patient records.")
 
+    # --- NEW LOGIC: Find patient by ID to get their email ---
+    patient = await user_collection.find_one({"aarogya_id": patient_aarogya_id, "user_type": "patient"})
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found with this ID.")
+    
+    patient_email = patient["email"]
+    # --- END NEW LOGIC ---
+
     if patient_email not in current_user.patient_list:
         raise HTTPException(status_code=403, detail="Access denied. Patient is not connected to your account.")
         
     reports_cursor = reports_collection.find({"owner_email": patient_email}).sort("upload_date", -1)
+    # ... (rest of the function remains the same, including the 'validated_reports' fix)
     reports_list = await reports_cursor.to_list(length=100)
 
-    return [
-        Report(**{**report, "id": str(report["_id"]), "content_id": str(report.get("content_id"))}) 
-        for report in reports_list
-    ]
+    validated_reports = []
+    for report in reports_list:
+        if '_id' in report:
+            report['_id'] = str(report['_id'])
+        if 'content_id' in report and report['content_id'] is not None:
+             report['content_id'] = str(report['content_id'])
+        validated_reports.append(Report.model_validate(report))
+        
+    return validated_reports
 
 @router.get("/my-structured-record", response_model=MedicalRecord, tags=["Reports"])
 async def get_my_structured_record(current_user: User = Depends(get_current_authenticated_user)):

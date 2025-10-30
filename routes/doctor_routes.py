@@ -151,8 +151,13 @@ async def get_my_patients(current_user: User = Depends(get_current_doctor)):
     
     patient_list = await patients_cursor.to_list(length=None)
 
-    # Convert to Pydantic models for the response
-    return [User.model_validate(patient) for patient in patient_list]
+    validated_patients = []
+    for patient in patient_list:
+        if '_id' in patient:
+            patient['_id'] = str(patient['_id'])  # Convert ObjectId to string
+        validated_patients.append(User.model_validate(patient))
+    
+    return validated_patients
 
 @router.post("/toggle_public", tags=["Doctor"])
 async def doctor_toggle_public_status(

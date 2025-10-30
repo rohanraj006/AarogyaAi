@@ -147,3 +147,22 @@ async def get_ai_chat_widget(
         **base_context
     }
     return templates.TemplateResponse("ai_chat_widget.html", context)
+
+@router.get("/doctor/patient/{patient_aarogya_id}", response_class=HTMLResponse)
+async def doctor_view_patient_page(
+    patient_aarogya_id: str,
+    current_user: User = Depends(get_current_authenticated_user),
+    base_context: Dict[str, Any] = Depends(get_base_template_context)
+):
+    """Renders the page for a doctor to view a specific patient's records."""
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    
+    context = {
+        "title": "Patient Records", 
+        "user": current_user, 
+        "user_json": current_user.model_dump_json(by_alias=True),
+        "patient_aarogya_id": patient_aarogya_id, # Pass the ID to the template
+        **base_context
+    }
+    return templates.TemplateResponse("doctor_patient_records.html", context)

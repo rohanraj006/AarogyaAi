@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Records | Aarogya AI{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    
+    <div class="pb-8 border-b border-gray-200">
+      <h1 class="text-3xl font-bold text-gray-900">Patient Records</h1>
+      <p id="patient-details-header" class="mt-2 text-lg text-gray-600">Loading records for patient ID: {{ patient_aarogya_id }}</p>
+    </div>
+
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+      <div class="lg:col-span-1 space-y-8">
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">Patient Details</h2>
+          <div id="patient-details-container" class="mt-4 space-y-3 text-gray-700">
+            <p>Loading...</p>
+          </div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">Doctor's Actions</h2>
+          <div class="mt-4 space-y-4">
+            <button id="add-note-button" class="block w-full text-center bg-indigo-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-indigo-700">
+              Add a New Note
+            </button>
+            </div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-2">
+        <div class="bg-white p-6 rounded-2xl shadow-md min-h-full">
+          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">Uploaded Reports</h2>
+          <div id="doctor-patient-report-list" 
+               data-patient-id="{{ patient_aarogya_id }}" 
+               class="mt-6 space-y-4">
+            <div id="doc-report-loader" class="text-center text-gray-500">Loading reports...</div>
+            </div>
+        </div>
+      </div>
+
+    </div>
+</div>
+{% endblock %}

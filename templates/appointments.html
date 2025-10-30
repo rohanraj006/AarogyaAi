@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Appointments | Aarogya AI{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    
+    <div class="pb-8 border-b border-gray-200">
+      <h1 class="text-3xl font-bold text-gray-900">Manage Appointments</h1>
+      {% if user.user_type == 'doctor' %}
+        <p class="mt-2 text-lg text-gray-600">Review and confirm pending appointment requests from your patients.</p>
+      {% else %}
+        <p class="mt-2 text-lg text-gray-600">Book and manage your appointments with connected doctors.</p>
+      {% endif %}
+    </div>
+
+    <div class="mt-8">
+      {% if user.user_type == 'doctor' %}
+        <div id="doctor-appointments-view">
+          <h2 class="text-2xl font-semibold text-gray-800 mb-6">Pending Requests</h2>
+          <div id="pending-requests-container" class="space-y-4">
+            <div id="pending-loader" class="text-center text-gray-500">Loading requests...</div>
+            </div>
+        </div>
+
+      {% elif user.user_type == 'patient' %}
+        <div id="patient-appointments-view" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          
+          <div class="bg-white p-6 rounded-2xl shadow-md">
+            <h2 class="text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">Book a New Appointment</h2>
+            <form id="requestAppointmentForm" class="space-y-4">
+              <div>
+                <label for="doctor-select" class="block text-sm font-medium text-gray-700">Select a Doctor</label>
+                <select id="doctor-select" name="doctor_aarogya_id" required class="mt-1 block w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <option value="">Loading doctors...</option>
+                </select>
+              </div>
+              <div>
+                <label for="appointment-time" class="block text-sm font-medium text-gray-700">Preferred Date & Time (Optional)</label>
+                <input type="datetime-local" id="appointment-time" name="appointment_time" class="mt-1 block w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              </div>
+              <div>
+                <label for="reason" class="block text-sm font-medium text-gray-700">Reason for Visit</label>
+                <input type="text" id="reason" name="reason" required placeholder="e.g., Annual Checkup, Follow-up" class="mt-1 block w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              </div>
+              <div>
+                <label for="patient-notes" class="block text-sm font-medium text-gray-700">Symptoms/Notes</label>
+                <textarea id="patient-notes" name="patient_notes" rows="3" required placeholder="Please describe your symptoms or provide any notes for the doctor." class="mt-1 block w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+              </div>
+              <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Send Appointment Request
+              </button>
+            </form>
+          </div>
+
+          <div class="bg-white p-6 rounded-2xl shadow-md">
+            <h2 class="text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">My Appointments</h2>
+            <div class="text-center text-gray-500">
+              <p>Your upcoming and past appointments will be listed here.</p>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+</div>
+{% endblock %}

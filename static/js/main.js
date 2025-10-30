@@ -216,4 +216,364 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     }
+    // --- NEW: Logic for Patient Dashboard Connection Requests ---
+    const requestsContainer = document.getElementById("connection-requests-container");
+
+    if (requestsContainer) {
+        // 1. Fetch and display pending requests on page load
+        fetch('/connections/requests/pending')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Could not fetch requests.');
+                }
+                return response.json();
+            })
+            .then(requests => {
+                const loader = document.getElementById("requests-loader");
+                if (loader) loader.style.display = 'none';
+
+                if (requests.length === 0) {
+                    requestsContainer.innerHTML = '<p class="text-center text-gray-500">No pending connection requests.</p>';
+                    return;
+                }
+
+                requests.forEach(req => {
+                    const requestCard = document.createElement('div');
+                    requestCard.id = `request-${req._id}`; // Use _id from schema
+                    requestCard.className = 'p-4 border rounded-lg bg-gray-50 flex items-center justify-between';
+                    requestCard.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">New Request</p>
+                            <p class="text-sm text-gray-600">From: <strong>${req.doctor_email}</strong></p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button data-request-id="${req._id}" data-action="reject" class="btn-reject text-sm font-medium text-red-600 hover:text-red-800 px-3 py-1 rounded-md bg-red-100 hover:bg-red-200">
+                                Reject
+                            </button>
+                            <button data-request-id="${req._id}" data-action="accept" class="btn-accept text-sm font-medium text-white px-3 py-1 rounded-md bg-green-600 hover:bg-green-700">
+                                Accept
+                            </button>
+                        </div>
+                    `;
+                    requestsContainer.appendChild(requestCard);
+                });
+            })
+            .catch(error => {
+                const loader = document.getElementById("requests-loader");
+                if (loader) loader.style.display = 'none';
+                requestsContainer.innerHTML = `<p class="text-center text-red-500">${error.message}</p>`;
+            });
+
+        // 2. Use event delegation to handle button clicks
+        requestsContainer.addEventListener('click', function(event) {
+            const button = event.target.closest('.btn-accept, .btn-reject');
+            if (!button) return;
+
+            const requestId = button.getAttribute('data-request-id');
+            const action = button.getAttribute('data-action');
+            
+            let url, method;
+
+            if (action === 'accept') {
+                // NOTE: Your API route for accept is a GET request
+                url = `/connections/requests/accept/${requestId}`;
+                method = 'GET';
+            } else {
+                // NOTE: Your API route for reject is a POST request
+                url = `/connections/requests/reject/${requestId}`;
+                method = 'POST';
+            }
+
+            Swal.fire({
+                title: 'Processing...',
+                text: `Please wait while we ${action} the request.`,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            fetch(url, { method: method })
+                .then(response => {
+                    if (!response.ok) { return response.json().then(err => { throw err; }); }
+                    return response.json();
+                })
+                .then(data => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: data.message
+                    });
+                    // Remove the card from the UI
+                    const cardToRemove = document.getElementById(`request-${requestId}`);
+                    if (cardToRemove) cardToRemove.remove();
+
+                    // Check if any requests are left
+                    if (requestsContainer.querySelectorAll('[id^="request-"]').length === 0) {
+                         requestsContainer.innerHTML = '<p class="text-center text-gray-500">No pending connection requests.</p>';
+                    }
+                })
+                .catch(error => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Action Failed',
+                        text: error.detail || 'An unknown error occurred.'
+                    });
+                });
+        });
+    }
+
+    // --- NEW: Logic for Patient Reports Page ---
+    const uploadForm = document.getElementById('uploadReportForm');
+    const reportListContainer = document.getElementById('report-list-container');
+    const structuredRecordContainer = document.getElementById('structured-record-container');
+
+    // Helper function to fetch and display structured record
+    const loadStructuredRecord = () => {
+        const loader = document.getElementById('record-loader');
+        if (!loader) return;
+
+        fetch('/reports/my-structured-record')
+            .then(response => response.json())
+            .then(record => {
+                loader.style.display = 'none';
+                let html = '';
+
+                if (record.diagnoses && record.diagnoses.length > 0) {
+                    html += '<h3 class="text-md font-semibold text-gray-700">Diagnoses</h3><ul class="list-disc list-inside text-sm space-y-1">';
+                    record.diagnoses.forEach(dx => {
+                        html += `<li><strong>${dx.disease}</strong> (${dx.diagnosis_date ? new Date(dx.diagnosis_date).getFullYear() : 'N/A'})</li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p class="text-sm text-gray-500">No diagnoses on record.</p>';
+                }
+                
+                if (record.current_medications && record.current_medications.length > 0) {
+                    html += '<h3 class="text-md font-semibold text-gray-700 mt-4">Medications</h3><ul class="list-disc list-inside text-sm space-y-1">';
+                    record.current_medications.forEach(med => {
+                        html += `<li><strong>${med.name}</strong> (${med.dosage}, ${med.frequency})</li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p class="text-sm text-gray-500 mt-4">No medications on record.</p>';
+                }
+
+                structuredRecordContainer.innerHTML = html;
+            })
+            .catch(error => {
+                loader.style.display = 'none';
+                structuredRecordContainer.innerHTML = '<p class="text-red-500">Could not load structured record.</p>';
+            });
+    };
+
+    // Helper function to fetch and display reports
+    const loadReports = () => {
+        const loader = document.getElementById('report-loader');
+        if (!loader) return;
+        
+        loader.style.display = 'block';
+        reportListContainer.innerHTML = ''; // Clear old list
+        reportListContainer.appendChild(loader);
+
+        fetch('/reports/my-reports')
+            .then(response => response.json())
+            .then(reports => {
+                loader.style.display = 'none';
+                if (reports.length === 0) {
+                    reportListContainer.innerHTML = '<p class="text-center text-gray-500">No reports uploaded yet.</p>';
+                    return;
+                }
+
+                reports.forEach(report => {
+                    const reportCard = document.createElement('div');
+                    reportCard.className = 'p-4 border rounded-lg bg-gray-50 flex items-center justify-between';
+                    reportCard.id = `report-${report._id}`;
+                    reportCard.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${report.filename}</p>
+                            <p class="text-sm text-gray-600">${report.report_type || 'User Upload'}</p>
+                            <p class="text-xs text-gray-500">Uploaded: ${new Date(report.upload_date).toLocaleDateString()}</p>
+                        </div>
+                        <div class="flex gap-2" data-report-id="${report._id}">
+                            <button class="btn-summarize text-sm font-medium text-indigo-600 hover:text-indigo-800" title="Get AI Summary of All Records">Summary</button>
+                            <button class="btn-download text-sm font-medium text-green-600 hover:text-green-800" title="Download Report">Download</button>
+                            <button class="btn-delete text-sm font-medium text-red-600 hover:text-red-800" title="Delete Report">Delete</button>
+                        </div>
+                    `;
+                    reportListContainer.appendChild(reportCard);
+                });
+            })
+            .catch(error => {
+                loader.style.display = 'none';
+                reportListContainer.innerHTML = '<p class="text-red-500">Could not load reports.</p>';
+            });
+    };
+
+    // --- Main execution for Reports Page ---
+    if (uploadForm && reportListContainer && structuredRecordContainer) {
+        
+        // 1. Load initial data
+        loadStructuredRecord();
+        loadReports();
+
+        // 2. Handle file upload
+        uploadForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(uploadForm);
+
+            Swal.fire({
+                title: 'Uploading...',
+                text: 'Please wait while your report is uploaded and processed.',
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            fetch('/reports/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) { return response.json().then(err => { throw err; }); }
+                return response.json();
+            })
+            .then(data => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Upload Successful',
+                    text: data.message || 'Your report has been uploaded.'
+                });
+                uploadForm.reset();
+                loadReports(); // Refresh the report list
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Upload Failed',
+                    text: error.detail || 'An unknown error occurred.'
+                });
+            });
+        });
+
+        // 3. Handle report list actions (Delete, Download, Summarize)
+        reportListContainer.addEventListener('click', function(event) {
+            const button = event.target;
+            const reportId = button.closest('[data-report-id]').getAttribute('data-report-id');
+            if (!reportId) return;
+
+            // --- DELETE ACTION ---
+            if (button.classList.contains('btn-delete')) {
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: "You won't be able to revert this!",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Yes, delete it!'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        fetch(`/reports/${reportId}`, { method: 'DELETE' })
+                            .then(response => {
+                                if (!response.ok) { throw new Error('Delete failed'); }
+                                Swal.fire('Deleted!', 'Your report has been deleted.', 'success');
+                                document.getElementById(`report-${reportId}`).remove(); // Remove from UI
+                            })
+                            .catch(error => {
+                                Swal.fire('Error', 'Could not delete the report.', 'error');
+                            });
+                    }
+                });
+            }
+
+            // --- DOWNLOAD ACTION ---
+            if (button.classList.contains('btn-download')) {
+                // We don't use fetch for downloads. We just point the browser to the URL.
+                window.location.href = `/reports/${reportId}/download`;
+            }
+
+            // --- SUMMARY ACTION ---
+            if (button.classList.contains('btn-summarize')) {
+                Swal.fire({
+                    title: 'Generating Summary...',
+                    text: 'The AI is reading your full medical record to provide a summary.',
+                    didOpen: () => { Swal.showLoading(); }
+                });
+                
+                fetch(`/reports/${reportId}/summarize`, { method: 'POST' })
+                    .then(response => {
+                        if (!response.ok) { return response.json().then(err => { throw err; }); }
+                        return response.json();
+                    })
+                    .then(data => {
+                        Swal.fire({
+                            title: 'AI Medical Summary',
+                            // Use text-align: left for readable medical text
+                            html: `<div style="text-align: left; white-space: pre-wrap; padding: 1em;">${data.summary}</div>`,
+                            icon: 'info',
+                            width: '800px'
+                        });
+                    })
+                    .catch(error => {
+                        Swal.fire('Error', error.detail || 'Could not generate summary.', 'error');
+                    });
+            }
+        });
+    }
+    // --- NEW: Logic for Doctor's Patient Record View Page ---
+    const docPatientReportContainer = document.getElementById('doctor-patient-report-list');
+    if (docPatientReportContainer) {
+        const patientId = docPatientReportContainer.getAttribute('data-patient-id');
+        const loader = document.getElementById('doc-report-loader');
+
+        // We call the NEW API route we created in Step 1
+        fetch(`/reports/patient-by-id/${patientId}`)
+            .then(response => {
+                if (!response.ok) { return response.json().then(err => { throw err; }); }
+                return response.json();
+            })
+            .then(reports => {
+                loader.style.display = 'none';
+                if (reports.length === 0) {
+                    docPatientReportContainer.innerHTML = '<p class="text-center text-gray-500">No reports found for this patient.</p>';
+                    return;
+                }
+
+                reports.forEach(report => {
+                    const reportCard = document.createElement('div');
+                    reportCard.className = 'p-4 border rounded-lg bg-gray-50 flex items-center justify-between';
+                    reportCard.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${report.filename}</p>
+                            <p class="text-sm text-gray-600">${report.report_type || 'Patient Upload'}</p>
+                            <p class="text-xs text-gray-500">Uploaded: ${new Date(report.upload_date).toLocaleDateString()}</p>
+                        </div>
+                        <div class="flex gap-2" data-report-id="${report.id}">
+                            <button class="btn-doc-summarize text-sm font-medium text-indigo-600 hover:text-indigo-800">Summary</button>
+                            <button class="btn-doc-download text-sm font-medium text-green-600 hover:text-green-800">Download</button>
+                        </div>
+                    `;
+                    docPatientReportContainer.appendChild(reportCard);
+                });
+            })
+            .catch(error => {
+                loader.style.display = 'none';
+                docPatientReportContainer.innerHTML = `<p class="text-center text-red-500">Error: ${error.detail || 'Could not load reports.'}</p>`;
+            });
+        
+        // Also load the patient's details for the header/info box
+        const patientDetailsContainer = document.getElementById('patient-details-container');
+        const patientHeader = document.getElementById('patient-details-header');
+        
+        // We can reuse the patient search API for this
+        fetch(`/doctor/api/patients/search?aarogya_id=${patientId}`)
+            .then(response => response.json())
+            .then(patient => {
+                patientHeader.textContent = `Viewing Records for: ${patient.name.first} ${patient.name.last}`;
+                patientDetailsContainer.innerHTML = `
+                    <p><strong>Name:</strong> ${patient.name.first} ${patient.name.last}</p>
+                    <p><strong>Email:</strong> ${patient.email}</p>
+                    <p><strong>Aarogya ID:</strong> ${patient.aarogya_id}</p>
+                `;
+            })
+            .catch(err => {
+                patientDetailsContainer.innerHTML = '<p class="text-red-500">Could not load patient details.</p>';
+            });
+    }
 });
