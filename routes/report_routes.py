@@ -13,7 +13,7 @@ from datetime import datetime
 from models.schemas import MedicalRecord, User, Report, ReportContentRequest
 from security import get_current_authenticated_user
 from database import reports_collection, user_collection, medical_records_collection, report_contents_collection # Motor collections
-from ai_core.rag_engine import get_summary_response, pinecone_index, embedding_model # get_summary_response is now async service wrapper
+from ai_core.rag_engine import get_summary_response, pinecone_index, embedding_model, chatbot_service # get_summary_response is now async service wrapper
 
 router = APIRouter()
 
@@ -242,7 +242,7 @@ async def download_report_as_pdf(report_id: str, current_user: User = Depends(ge
 @router.post("/{report_id}/summarize")
 async def summarize_report(report_id: str, current_user: User = Depends(get_current_authenticated_user)):
     """
-    Summarizes the patient's entire medical record using the comprehensive AI service.
+    Summarizes the content of a SINGLE report, not the whole patient record.
     """
     try:
         report = await reports_collection.find_one({"_id": ObjectId(report_id)})
@@ -251,19 +251,29 @@ async def summarize_report(report_id: str, current_user: User = Depends(get_curr
 
     if not report or report["owner_email"] != current_user.email:
         raise HTTPException(status_code=404, detail="Report not found")
-    
-    if current_user.user_type == "doctor" and not current_user.is_authorized:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You must be authorized by the platform owner to use the AI summarization feature."
-        )
-    
-    # Call the new asynchronous service wrapper which summarizes the entire MedicalRecord.
+
+    content_id_str = report.get("content_id")
+    if not content_id_str:
+        raise HTTPException(status_code=404, detail="Report has no content to summarize.")
+
     try:
-        summary = await get_summary_response(user_email=current_user.email)
+        content_doc = await report_contents_collection.find_one({"_id": ObjectId(content_id_str)})
+        report_content = content_doc.get("content_text") if content_doc else None
+    except Exception:
+        raise HTTPException(status_code=404, detail="Could not find report content.")
+
+    if not report_content:
+         return {"filename": report['filename'], "summary": "This report content is empty."}
+
+    if not chatbot_service:
+        raise HTTPException(status_code=503, detail="AI Summary service is not available.")
+
+    # Call the new service to summarize the text
+    try:
+        summary = await chatbot_service.summarize_report_text(report_content)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating full medical record summary: {e}")
-        
+        raise HTTPException(status_code=500, detail=f"Error generating summary: {e}")
+
     return {"filename": report['filename'], "summary": summary}
 
 @router.get("/patient-by-id/{patient_aarogya_id}", response_model=List[Report], tags=["Reports"])
@@ -316,3 +326,105 @@ async def get_my_structured_record(current_user: User = Depends(get_current_auth
         return MedicalRecord(patient_id=current_user.email)
         
     return MedicalRecord(**record)
+
+@router.get("/doctor/download/{report_id}")
+async def doctor_download_patient_report(
+    report_id: str, 
+    current_user: User = Depends(get_current_authenticated_user)
+):
+    """Allows a connected doctor to download a patient's report."""
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctors can access this.")
+        
+    try:
+        report = await reports_collection.find_one({"_id": ObjectId(report_id)})
+    except Exception:
+         raise HTTPException(status_code=400, detail="Invalid Report ID format.")
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    # SECURITY CHECK: Is this patient on the doctor's list?
+    if report["owner_email"] not in current_user.patient_list:
+        raise HTTPException(status_code=403, detail="You are not connected to this patient.")
+    
+    # (The rest of this code is copied from the patient's download route)
+    content_id = report.get("content_id")
+    if not content_id:
+        raise HTTPException(status_code=400, detail="Report has no stored content ID.")
+
+    try:
+        content_doc = await report_contents_collection.find_one({"_id": ObjectId(content_id)})
+        report_content = content_doc.get("content_text") if content_doc else None
+    except Exception:
+         raise HTTPException(status_code=400, detail="Invalid Content ID format or DB error.")
+    
+    if not report_content:
+        raise HTTPException(status_code=404, detail="Report content not found or is empty.")
+    
+    def generate_fpdf(content, filename):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf_text = content.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(0, 10, txt=pdf_text)
+        temp_pdf_path = f"temp_{filename}_{os.getpid()}.pdf"
+        pdf.output(temp_pdf_path)
+        return temp_pdf_path
+
+    temp_pdf_path = await asyncio.to_thread(generate_fpdf, report_content, report_id)
+    
+    return FileResponse(
+        temp_pdf_path,
+        media_type='application/pdf',
+        filename=f"{os.path.splitext(report['filename'])[0]}.pdf"
+    )
+
+
+@router.post("/doctor/summarize/{report_id}")
+async def doctor_summarize_patient_report(
+    report_id: str, 
+    current_user: User = Depends(get_current_authenticated_user)
+):
+    """
+    Summarizes the content of a SINGLE patient report.
+    """
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctors can access this.")
+
+    try:
+        report = await reports_collection.find_one({"_id": ObjectId(report_id)})
+    except Exception:
+         raise HTTPException(status_code=400, detail="Invalid Report ID format.")
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # SECURITY CHECK
+    if report["owner_email"] not in current_user.patient_list:
+        raise HTTPException(status_code=403, detail="You are not connected to this patient.")
+
+    content_id_str = report.get("content_id")
+    if not content_id_str:
+        raise HTTPException(status_code=404, detail="Report has no content to summarize.")
+
+    try:
+        content_doc = await report_contents_collection.find_one({"_id": ObjectId(content_id_str)})
+        report_content = content_doc.get("content_text") if content_doc else None
+    except Exception:
+        raise HTTPException(status_code=404, detail="Could not find report content.")
+
+    if not report_content:
+         return {"filename": report['filename'], "summary": "This report content is empty."}
+
+    if not chatbot_service:
+        raise HTTPException(status_code=503, detail="AI Summary service is not available.")
+
+    # Call the new service to summarize the text
+    try:
+        summary = await chatbot_service.summarize_report_text(report_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating summary: {e}")
+
+    return {"filename": report['filename'], "summary": summary}
+

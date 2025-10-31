@@ -17,7 +17,7 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 if API_KEY:
     try:
         genai.configure(api_key=API_KEY)
-        SINGLE_MODEL_NAME = os.getenv("SINGLE_MODEL_NAME", "gemini-1.5-flash")
+        SINGLE_MODEL_NAME = os.getenv("SINGLE_MODEL_NAME", "gemini-2.5-flash")
     except Exception as e:
         logger.error(f"Error configuring Google Generative AI: {e}")
         SINGLE_MODEL_NAME = None
@@ -164,3 +164,24 @@ USER'S QUESTION: {doctor_query}
         except Exception as e:
             logger.error(f"Error during AI structured response generation: {e}", exc_info=True)
             return f"Error communicating with AI model for structured task: {type(e).__name__}: {e}"
+        
+    async def summarize_report_text(self, report_text: str) -> str:
+        """Generates a summary of a single piece of text."""
+        if not self.model: return "AI model is not initialized for summarization."
+        if not report_text or not report_text.strip():
+            return "No text was provided to summarize."
+
+        system_instruction = (
+            "You are a medical assistant chatbot. Your task is to provide a concise summary "
+            "of the following medical report text. Extract key findings, diagnoses, and treatments mentioned. "
+            "Present the summary as clean text, without any markdown like '**' or headers."
+        )
+
+        full_prompt = f"{system_instruction}\n\n--- REPORT TEXT TO SUMMARIZE ---\n{report_text}\n\n--- SUMMARY ---"
+
+        try:
+            response = await asyncio.to_thread(self.model.generate_content, full_prompt)
+            return response.text if hasattr(response, 'text') and response.text is not None else "Sorry, the AI model returned an empty summary response."
+        except Exception as e:
+            logger.error(f"Error generating single report summary: {e}")
+            return f"Sorry, I could not generate the summary at this time. Error: {type(e).__name__}"

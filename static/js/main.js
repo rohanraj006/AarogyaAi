@@ -1,16 +1,27 @@
 document.addEventListener("DOMContentLoaded", function() {
 
-    // --- Universal Form Handling Logic ---
+    
     const handleFormSubmit = (formElement) => {
         if (!formElement) return;
 
         formElement.addEventListener("submit", function(event) {
             event.preventDefault();
+            
+            // 1. Get the form data
             const formData = new FormData(formElement);
             
+            // 2. Convert it to the correct format (x-www-form-urlencoded)
+            // This is the key fix for the registration routes!
+            const body = new URLSearchParams(formData);
+
             fetch(formElement.action, {
                 method: 'POST',
-                body: formData
+                headers: {
+                    // 3. Explicitly set the Content-Type
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                // 4. Send the correct body format
+                body: body
             })
             .then(response => {
                 if (!response.ok) {
@@ -22,11 +33,12 @@ document.addEventListener("DOMContentLoaded", function() {
                 Swal.fire({
                     icon: 'success',
                     title: 'Success!',
-                    text: data.message || 'Your request was successful.',
+                    // The registration routes return the user object, login returns a message
+                    text: data.message || 'Registration successful!', 
                     timer: 2000,
                     showConfirmButton: false
                 }).then(() => {
-                    // Smart redirect based on user type
+                    // This redirect logic will now work for all forms
                     if (data.user_type === 'doctor') {
                         window.location.href = '/doctor/dashboard';
                     } else {
@@ -544,7 +556,7 @@ document.addEventListener("DOMContentLoaded", function() {
                             <p class="text-sm text-gray-600">${report.report_type || 'Patient Upload'}</p>
                             <p class="text-xs text-gray-500">Uploaded: ${new Date(report.upload_date).toLocaleDateString()}</p>
                         </div>
-                        <div class="flex gap-2" data-report-id="${report.id}">
+                        <div class="flex gap-2" data-report-id="${report._id}">
                             <button class="btn-doc-summarize text-sm font-medium text-indigo-600 hover:text-indigo-800">Summary</button>
                             <button class="btn-doc-download text-sm font-medium text-green-600 hover:text-green-800">Download</button>
                         </div>
@@ -556,6 +568,46 @@ document.addEventListener("DOMContentLoaded", function() {
                 loader.style.display = 'none';
                 docPatientReportContainer.innerHTML = `<p class="text-center text-red-500">Error: ${error.detail || 'Could not load reports.'}</p>`;
             });
+
+            docPatientReportContainer.addEventListener('click', function(event) {
+            const button = event.target;
+            // Find the parent div with the report ID
+            const reportId = button.closest('[data-report-id]')?.getAttribute('data-report-id');
+            if (!reportId) return;
+
+            // --- DOWNLOAD ACTION (Doctor) ---
+            if (button.classList.contains('btn-doc-download')) {
+                // Call the new doctor-specific download route
+                window.location.href = `/reports/doctor/download/${reportId}`;
+            }
+
+            // --- SUMMARY ACTION (Doctor) ---
+            if (button.classList.contains('btn-doc-summarize')) {
+                Swal.fire({
+                    title: 'Generating Summary...',
+                    text: "The AI is reading the patient's full medical record.",
+                    didOpen: () => { Swal.showLoading(); }
+                });
+                
+                // Call the new doctor-specific summarize route
+                fetch(`/reports/doctor/summarize/${reportId}`, { method: 'POST' })
+                    .then(response => {
+                        if (!response.ok) { return response.json().then(err => { throw err; }); }
+                        return response.json();
+                    })
+                    .then(data => {
+                        Swal.fire({
+                            title: 'AI Medical Summary',
+                            html: `<div style="text-align: left; white-space: pre-wrap; padding: 1em;">${data.summary}</div>`,
+                            icon: 'info',
+                            width: '800px'
+                        });
+                    })
+                    .catch(error => {
+                        Swal.fire('Error', error.detail || 'Could not generate summary.', 'error');
+                    });
+            }
+        });
         
         // Also load the patient's details for the header/info box
         const patientDetailsContainer = document.getElementById('patient-details-container');

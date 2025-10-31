@@ -19,7 +19,7 @@ def generate_aarogya_id(user_type: Literal["patient", "doctor"]):
     random_part = str(random.randint(100000, 999999))
     return prefix +date_part+ random_part
 
-@router.post("/register/patient", response_model=User, status_code=status.HTTP_201_CREATED, tags=["Users"])
+@router.post("/register/patient", status_code=status.HTTP_201_CREATED, tags=["Users"])
 async def register_patient(
     response: Response, 
     request: Request,
@@ -67,9 +67,15 @@ async def register_patient(
         samesite="Lax"
     )
 
-    return User.model_validate(new_user_data)
+    # Return a simple, JSON-safe dictionary instead of a Pydantic model
+    return {
+        "message": "Registration successful.",
+        "user_type": new_user_data["user_type"],
+        "email": new_user_data["email"],
+        "aarogya_id": new_user_data["aarogya_id"]
+    }
 
-@router.post("/register/doctor", response_model=User, status_code=status.HTTP_201_CREATED, tags=["Users"])
+@router.post("/register/doctor", status_code=status.HTTP_201_CREATED, tags=["Users"])
 async def register_doctor(
     response: Response, 
     request: Request,
@@ -116,7 +122,13 @@ async def register_doctor(
         samesite="Lax"
     )
     
-    return User.model_validate(new_user_data)
+    # Return a simple, JSON-safe dictionary instead of a Pydantic model
+    return {
+        "message": "Registration successful.",
+        "user_type": new_user_data["user_type"],
+        "email": new_user_data["email"],
+        "aarogya_id": new_user_data["aarogya_id"]
+    }
 
 @router.post("/login", tags=["Users"])
 async def login_for_access_token(
