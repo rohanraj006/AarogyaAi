@@ -1,7 +1,7 @@
 # routes/report_routes.py
 import os
 import fitz # PyMuPDF (synchronous)
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Body
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Body, BackgroundTasks
 from fastapi.responses import FileResponse
 from typing import List
 from bson import ObjectId
@@ -193,7 +193,7 @@ async def delete_report(report_id: str, current_user: User = Depends(get_current
     return
 
 @router.get("/{report_id}/download")
-async def download_report_as_pdf(report_id: str, current_user: User = Depends(get_current_authenticated_user)):
+async def download_report_as_pdf(report_id: str, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_authenticated_user)):
     """
     Downloads the report content as a basic PDF using FPDF, fetching content from the dedicated collection.
     """
@@ -232,7 +232,7 @@ async def download_report_as_pdf(report_id: str, current_user: User = Depends(ge
         return temp_pdf_path
 
     temp_pdf_path = await asyncio.to_thread(generate_fpdf, report_content, report_id)
-    
+    background_tasks.add_task(os.remove, temp_pdf_path)
     return FileResponse(
         temp_pdf_path,
         media_type='application/pdf',
@@ -329,7 +329,8 @@ async def get_my_structured_record(current_user: User = Depends(get_current_auth
 
 @router.get("/doctor/download/{report_id}")
 async def doctor_download_patient_report(
-    report_id: str, 
+    report_id: str,
+    background_tasks: BackgroundTasks, 
     current_user: User = Depends(get_current_authenticated_user)
 ):
     """Allows a connected doctor to download a patient's report."""
@@ -373,7 +374,7 @@ async def doctor_download_patient_report(
         return temp_pdf_path
 
     temp_pdf_path = await asyncio.to_thread(generate_fpdf, report_content, report_id)
-    
+    background_tasks.add_task(os.remove, temp_pdf_path)
     return FileResponse(
         temp_pdf_path,
         media_type='application/pdf',
