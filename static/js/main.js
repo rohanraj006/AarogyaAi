@@ -628,4 +628,236 @@ document.addEventListener("DOMContentLoaded", function() {
                 patientDetailsContainer.innerHTML = '<p class="text-red-500">Could not load patient details.</p>';
             });
     }
+
+    // --- NEW: Logic for Appointments Page ---
+    // --- NEW: Logic for Appointments Page ---
+    const patientAppointmentsView = document.getElementById('patient-appointments-view');
+    const doctorAppointmentsView = document.getElementById('doctor-appointments-view');
+
+    // --- 1. If this is the PATIENT'S view ---
+    if (patientAppointmentsView) {
+        const doctorSelect = document.getElementById('doctor-select');
+        const requestForm = document.getElementById('requestAppointmentForm');
+
+        // Load connected doctors into the dropdown
+        fetch('/appointments/doctors/connected') // Corrected URL with prefix
+            .then(response => {
+                if (!response.ok) throw new Error('Could not fetch doctors.');
+                return response.json();
+            })
+            .then(doctors => {
+                if (doctors.length === 0) {
+                    doctorSelect.innerHTML = '<option value="" disabled>No connected doctors found.</option>';
+                    return;
+                }
+                doctorSelect.innerHTML = '<option value="" disabled selected>Select a doctor</option>';
+                doctors.forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.aarogya_id;
+                    option.textContent = `Dr. ${doc.email} (ID: ${doc.aarogya_id})`;
+                    doctorSelect.appendChild(option);
+                });
+            })
+            .catch(err => {
+                doctorSelect.innerHTML = '<option value="" disabled>Error loading doctors.</option>';
+            });
+
+        // Handle the appointment request form submission
+        requestForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(requestForm);
+            const body = new URLSearchParams(formData); // Send as form data
+
+            Swal.fire({
+                title: 'Sending Request...',
+                text: 'Please wait.',
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            fetch('/appointments/request', { // Corrected backend to accept form data
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body
+            })
+            .then(response => {
+                if (!response.ok) { return response.json().then(err => { throw err; }); }
+                return response.json();
+            })
+            .then(data => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Request Sent!',
+                    text: data.message || 'Your request has been sent to the doctor.'
+                });
+                requestForm.reset();
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Oops...',
+                    text: error.detail || 'Could not send request. Do you have a pending request with this doctor?'
+                });
+            });
+        });
+    }
+
+    // --- 2. If this is the DOCTOR'S view ---
+    if (doctorAppointmentsView) {
+        const container = document.getElementById('pending-requests-container');
+        const loader = document.getElementById('pending-loader');
+
+        // Load pending requests for the doctor
+        fetch('/appointments/pending') // Correct URL
+            .then(response => {
+                if (!response.ok) throw new Error('Could not fetch requests.');
+                return response.json();
+            })
+            .then(requests => {
+                loader.style.display = 'none';
+                if (requests.length === 0) {
+                    container.innerHTML = '<p class="text-center text-gray-500">No pending appointment requests.</p>';
+                    return;
+                }
+
+                requests.forEach(req => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white p-6 rounded-2xl shadow-md space-y-4';
+                    card.id = `request-card-${req._id}`; // Use _id from schema
+
+                    // Apply color based on severity
+                    let severityClass = 'bg-gray-100 text-gray-800';
+                    if (req.predicted_severity === 'Very Serious') {
+                        severityClass = 'bg-red-100 text-red-800';
+                    } else if (req.predicted_severity === 'Moderate') {
+                        severityClass = 'bg-yellow-100 text-yellow-800';
+                    }
+
+                    // This is the updated HTML with the Reject button
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-900">Patient: ${req.patient_email}</h3>
+                            <span class="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium ${severityClass}">
+                                ${req.predicted_severity || 'N/A'}
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-700"><strong>Reason:</strong> ${req.reason}</p>
+                        <p class="text-sm text-gray-600"><strong>Symptoms/Notes:</strong> ${req.patient_notes || 'No notes provided.'}</p>
+                        
+                        <div class="border-t pt-4 space-y-2">
+                            <label for="time-${req._id}" class="block text-sm font-medium text-gray-700">Set Appointment Time:</label>
+                            <input type="datetime-local" id="time-${req._id}" name="appointment_time" 
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <button data-request-id="${req._id}" 
+                                    class="btn-confirm-appointment w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Confirm Appointment
+                            </button>
+                            <button data-request-id="${req._id}" 
+                                    class="btn-reject-appointment w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 mt-2">
+                                Reject
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            })
+            .catch(err => {
+                loader.style.display = 'none';
+                container.innerHTML = `<p class="text-center text-red-500">Error: ${err.message}</p>`;
+            });
+
+        // --- THIS IS THE COMBINED EVENT LISTENER ---
+        // Use event delegation to handle button clicks
+        container.addEventListener('click', function(event) {
+            // Find the button that was clicked
+            const button = event.target.closest('.btn-confirm-appointment, .btn-reject-appointment');
+            
+            // If the click wasn't on one of our buttons, do nothing
+            if (!button) return; 
+
+            const requestId = button.getAttribute('data-request-id');
+
+            // --- IF: CONFIRM ACTION ---
+            if (button.classList.contains('btn-confirm-appointment')) {
+                const timeInput = document.getElementById(`time-${requestId}`);
+                const appointmentTime = timeInput.value;
+
+                if (!appointmentTime) {
+                    Swal.fire('Error', 'Please select a date and time for the appointment.', 'error');
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Confirming...',
+                    text: 'Please wait.',
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                fetch('/appointments/confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        request_id: requestId,
+                        appointment_time: appointmentTime
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) { return response.json().then(err => { throw err; }); }
+                    return response.json();
+                })
+                .then(data => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Confirmed!',
+                        text: data.message
+                    });
+                    document.getElementById(`request-card-${requestId}`).remove();
+                    if (container.children.length === 0) {
+                         container.innerHTML = '<p class="text-center text-gray-500">No pending appointment requests.</p>';
+                    }
+                })
+                .catch(error => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed to Confirm',
+                        text: error.detail || 'An unknown error occurred.'
+                    });
+                });
+            }
+            
+            // --- ELSE IF: REJECT ACTION ---
+            else if (button.classList.contains('btn-reject-appointment')) {
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: "Do you want to reject this appointment request?",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Yes, reject it!'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        fetch('/appointments/reject', { // Calls the new reject route
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ request_id: requestId })
+                        })
+                        .then(response => {
+                            if (!response.ok) { return response.json().then(err => { throw err; }); }
+                            return response.json();
+                        })
+                        .then(data => {
+                            Swal.fire('Rejected!', data.message, 'success');
+                            document.getElementById(`request-card-${requestId}`).remove();
+                            if (container.children.length === 0) {
+                                container.innerHTML = '<p class="text-center text-gray-500">No pending appointment requests.</p>';
+                            }
+                        })
+                        .catch(error => {
+                            Swal.fire('Failed', error.detail || 'Could not reject.', 'error');
+                        });
+                    }
+                });
+            }
+        });
+    }
 });

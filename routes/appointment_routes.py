@@ -1,6 +1,6 @@
 # routes/appointment_routes.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Form
 from typing import List, Optional
 from bson import ObjectId
 from datetime import datetime
@@ -69,11 +69,9 @@ async def get_connected_doctors(current_user: User = Depends(get_current_authent
 # UPDATED DEPENDENCY
 @router.post("/request", status_code=status.HTTP_201_CREATED, tags=["Appointments"])
 async def request_appointment(
-    # Updated to accept rich fields
-    doctor_aarogya_id: str = Body(..., embed=True),
-    reason: str = Body(..., embed=True),
-    patient_notes: Optional[str] = Body(None, embed=True), # NEW FIELD: Patient's symptoms
-    appointment_time: Optional[datetime] = Body(None, embed=True), # NEW FIELD: Preferred time/date
+    doctor_aarogya_id: str = Form(...),
+    reason: str = Form(...),
+    patient_notes: Optional[str] = Form(None), # NEW FIELD: Patient's symptoms
     current_user: User = Depends(get_current_authenticated_user)
 ):
     """
@@ -90,6 +88,8 @@ async def request_appointment(
     if doctor.get("is_authorized") != True:
          raise HTTPException(status_code=403, detail="The selected doctor is not yet authorized by the platform owner.")
 
+    if doctor["email"] not in current_user.doctor_list:
+        raise HTTPException(status_code=403, detail="You are not connected to this doctor. You can only book with connected doctors.")
 
     # --- Triage Logic ---
     if not patient_notes or not patient_notes.strip():
@@ -120,7 +120,6 @@ async def request_appointment(
         reason=reason,
         patient_notes=patient_notes,
         status="pending",
-        appointment_time=appointment_time,
         predicted_severity=predicted_severity # NEW FIELD
     )
     
@@ -132,6 +131,41 @@ async def request_appointment(
         "predicted_severity": predicted_severity
     }
 
+@router.post("/reject", tags=["Appointments"])
+async def reject_appointment(
+    body: dict, # Expects {"request_id": "..."}
+    current_user: User = Depends(get_current_authenticated_user)
+):
+    """Allows a doctor to reject a pending appointment request."""
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=403, detail="Only doctors can reject appointments.")
+        
+    if not current_user.is_authorized:
+        raise HTTPException(status_code=403, detail="You must be authorized to perform this action.")
+    
+    request_id = body.get("request_id")
+    if not request_id:
+        raise HTTPException(status_code=400, detail="Missing request_id.")
+        
+    try:
+        request_obj_id = ObjectId(request_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request_id format.")
+
+    # Find and update the request
+    result = await appointments_collection.update_one(
+        {
+            "_id": request_obj_id,
+            "doctor_email": current_user.email,
+            "status": "pending"
+        },
+        {"$set": {"status": "rejected"}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Pending appointment request not found or already processed.")
+    
+    return {"message": "Appointment request has been rejected."}
 # --- 4. Doctor's Pending Queue ---
 # UPDATED DEPENDENCY
 @router.get("/pending", response_model=List[AppointmentRequestModel], tags=["Appointments"])
