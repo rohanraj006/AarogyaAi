@@ -3,24 +3,33 @@
 {% block title %}Doctor Dashboard | Aarogya AI{% endblock %}
 
 {% block content %}
-<div class="bg-gray-50/50">
+<div class="bg-gray-50/50 min-h-screen">
   <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
     
-    <div class="pb-8 border-b border-gray-200">
-      <h1 class="text-3xl font-bold text-gray-900">Doctor's Dashboard</h1>
-      <p class="mt-2 text-lg text-gray-600">Manage your appointments and access patient records.</p>
+    <div class="pb-8 border-b border-gray-200 flex flex-col md:flex-row justify-between md:items-end gap-4">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">
+          Welcome, Dr. {{ user.name.first if user.name else 'Doctor' }}
+        </h1>
+        <p class="mt-2 text-lg text-gray-600">Manage your practice, patients, and profile.</p>
+      </div>
+      <button onclick="document.getElementById('editDoctorProfileModal').classList.remove('hidden')" 
+              class="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+        Edit Profile
+      </button>
     </div>
 
     <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
 
       <div class="lg:col-span-1 space-y-8">
         
-        <div class="bg-white p-6 rounded-2xl shadow-md">
-          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">My Profile</h2>
-          <div class="mt-4 space-y-3 text-gray-700">
-            <p><strong>Email:</strong> <span class="text-gray-600">{{ user.email }}</span></p>
-            <p><strong>Aarogya ID:</strong> <span class="text-gray-600">{{ user.aarogya_id }}</span></p>
-            <p><strong>Status:</strong> 
+        <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-indigo-500">
+          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Professional Details</h2>
+          <div class="space-y-3 text-gray-700 text-sm">
+            <p><span class="font-medium text-gray-900">Specialization:</span> {{ user.specialization or 'General Practitioner' }}</p>
+            <p><span class="font-medium text-gray-900">Aarogya ID:</span> <span class="bg-gray-100 px-2 py-1 rounded text-xs font-mono">{{ user.aarogya_id }}</span></p>
+            <p><span class="font-medium text-gray-900">Status:</span> 
               {% if user.is_authorized %}
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                   Authorized
@@ -35,13 +44,44 @@
         </div>
 
         <div class="bg-white p-6 rounded-2xl shadow-md">
+          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Contact & Personal</h2>
+          <div class="space-y-3 text-gray-700 text-sm">
+            <p><span class="font-medium text-gray-900">Email:</span> {{ user.email }}</p>
+            <p><span class="font-medium text-gray-900">Phone:</span> {{ user.phone_number or 'N/A' }}</p>
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <p><span class="font-medium text-gray-900">Age:</span> {{ user.age or 'N/A' }}</p>
+                <p><span class="font-medium text-gray-900">Gender:</span> {{ user.gender or 'N/A' }}</p>
+            </div>
+            <p class="pt-1"><span class="font-medium text-gray-900">Address:</span><br>
+              {% if user.address %}
+                <span class="text-gray-500">{{ user.address.street }}, {{ user.address.city }}</span>
+              {% else %}
+                <span class="text-gray-400 italic">No address provided</span>
+              {% endif %}
+            </p>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-md">
+            <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Emergency Contact</h2>
+            <div class="space-y-2 text-gray-700 text-sm">
+                {% if user.emergency_contact %}
+                    <p><strong>{{ user.emergency_contact.name }}</strong> ({{ user.emergency_contact.relationship }})</p>
+                    <p><a href="tel:{{ user.emergency_contact.phone }}" class="text-indigo-600 hover:underline">{{ user.emergency_contact.phone }}</a></p>
+                {% else %}
+                    <p class="text-gray-400 italic">Not set.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-md">
           <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">Quick Actions</h2>
           <div class="mt-4 space-y-4">
             <a href="/appointments" class="block w-full text-center bg-indigo-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition transform hover:scale-105">
-              View Appointments
+              Manage Appointments
             </a>
             <a href="/doctor/patients/search" class="block w-full text-center bg-gray-700 text-white px-5 py-3 rounded-lg font-semibold hover:bg-gray-800 transition transform hover:scale-105">
-              Search for a Patient
+              Search for Patient
             </a>
           </div>
         </div>
@@ -49,10 +89,20 @@
 
       <div class="lg:col-span-2">
         <div class="bg-white p-6 rounded-2xl shadow-md min-h-full">
-          <h2 class="text-xl font-semibold text-gray-800 border-b pb-3">My Patients</h2>
+          <div class="flex justify-between items-center border-b pb-3">
+            <h2 class="text-xl font-semibold text-gray-800">My Connected Patients</h2>
+            <span class="bg-indigo-100 text-indigo-800 text-xs font-semibold px-2.5 py-0.5 rounded">
+                {{ user.patient_list|length }} Total
+            </span>
+          </div>
+          
           <div id="patient-list-container" class="mt-6">
-            <div id="patient-list-loader" class="text-center text-gray-500">
-              <p>Loading patient list...</p>
+            <div id="patient-list-loader" class="text-center text-gray-500 py-12">
+              <svg class="animate-spin h-8 w-8 text-indigo-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <p>Loading your patient list...</p>
             </div>
           </div>
         </div>
@@ -61,4 +111,110 @@
     </div>
   </div>
 </div>
+
+<div id="editDoctorProfileModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-xl bg-white mb-10">
+        <div class="flex justify-between items-center border-b pb-3">
+            <h3 class="text-xl font-bold text-gray-900">Edit Doctor Profile</h3>
+            <button onclick="document.getElementById('editDoctorProfileModal').classList.add('hidden')" class="text-gray-500 hover:text-gray-700">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <form id="editDoctorProfileForm" action="/users/update_profile" method="POST" class="mt-4 space-y-4">
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">First Name</label>
+                    <input name="first_name" value="{{ user.name.first if user.name else '' }}" required class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Last Name</label>
+                    <input name="last_name" value="{{ user.name.last if user.name else '' }}" required class="w-full border rounded px-3 py-2">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Specialization</label>
+                <input name="specialization" value="{{ user.specialization or '' }}" class="w-full border rounded px-3 py-2 bg-indigo-50 border-indigo-200">
+            </div>
+
+            <div class="grid grid-cols-3 gap-4">
+                 <div>
+                    <label class="block text-sm font-medium text-gray-700">Age</label>
+                    <input name="age" type="number" value="{{ user.age or '' }}" class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Gender</label>
+                    <select name="gender" class="w-full border rounded px-3 py-2">
+                        <option value="Male" {% if user.gender == 'Male' %}selected{% endif %}>Male</option>
+                        <option value="Female" {% if user.gender == 'Female' %}selected{% endif %}>Female</option>
+                        <option value="Other" {% if user.gender == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Phone</label>
+                    <input name="phone_number" value="{{ user.phone_number or '' }}" required class="w-full border rounded px-3 py-2">
+                </div>
+            </div>
+
+            <div class="border-t pt-3">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Clinic/Home Address</label>
+                <input name="street" value="{{ user.address.street if user.address else '' }}" class="w-full border rounded px-3 py-2 mb-2" placeholder="Street">
+                <div class="grid grid-cols-2 gap-2">
+                    <input name="city" value="{{ user.address.city if user.address else '' }}" class="w-full border rounded px-3 py-2" placeholder="City">
+                    <input name="state" value="{{ user.address.state if user.address else '' }}" class="w-full border rounded px-3 py-2" placeholder="State">
+                </div>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <input name="zip_code" value="{{ user.address.zip if user.address else '' }}" class="w-full border rounded px-3 py-2" placeholder="Zip">
+                    <input name="country" value="{{ user.address.country if user.address else '' }}" class="w-full border rounded px-3 py-2" placeholder="Country">
+                </div>
+            </div>
+
+             <div class="border-t pt-3">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Emergency Contact</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <input name="emergency_name" value="{{ user.emergency_contact.name if user.emergency_contact else '' }}" class="w-full border rounded px-3 py-2" placeholder="Contact Name">
+                    <input name="emergency_phone" value="{{ user.emergency_contact.phone if user.emergency_contact else '' }}" class="w-full border rounded px-3 py-2" placeholder="Contact Phone">
+                </div>
+                 <input name="emergency_relation" value="{{ user.emergency_contact.relationship if user.emergency_contact else '' }}" class="w-full border rounded px-3 py-2 mt-2" placeholder="Relationship">
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="document.getElementById('editDoctorProfileModal').classList.add('hidden')" class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const editDocForm = document.getElementById("editDoctorProfileForm");
+        if(editDocForm) {
+            editDocForm.addEventListener("submit", function(e) {
+                e.preventDefault();
+                const formData = new URLSearchParams(new FormData(editDocForm));
+                
+                Swal.fire({
+                    title: 'Saving...',
+                    didOpen: () => Swal.showLoading()
+                });
+
+                fetch(editDocForm.action, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
+                })
+                .then(res => {
+                     if (!res.ok) throw new Error("Update failed");
+                     return res.json();
+                })
+                .then(data => {
+                    Swal.fire('Success', data.message, 'success').then(() => location.reload());
+                })
+                .catch(err => Swal.fire('Error', 'Could not update profile. Please try again.', 'error'));
+            });
+        }
+    });
+</script>
 {% endblock %}

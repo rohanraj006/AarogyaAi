@@ -26,7 +26,12 @@ class UserSession(BaseModel):
         arbitrary_types_allowed = True
 # --- End Session Management ---
 
-
+class Address(BaseModel):
+    street: str
+    city: str
+    state: str
+    zip: str   # Note: This is 'zip', not 'zip_code'
+    country: str
 # --- 2. Detailed Core Models (NEW from Codebase 2) ---
 class Name(BaseModel):
     first: str
@@ -113,10 +118,6 @@ class MedicalRecord(BaseModel):
     immunizations: List[Immunization] = []
     family_medical_history: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-# --- End NEW Core Models ---
-
-
-# --- 3. Updated User and Request Schemas ---
 
 class User(BaseModel):
     
@@ -139,12 +140,17 @@ class User(BaseModel):
     emergency_contact: Optional[EmergencyContact] = None
     registration_date: Optional[datetime] = None
     date_of_birth: Optional[str] = None 
+    specialization: Optional[str] = None
+    blood_group:Optional[str] = None
+    emergrncy_contact:Optional[str] = None
 
-    # Add this Config class
+    medical_conditions: Optional[str] = None 
+    allergies: Optional[str] = None           
+    current_medications: Optional[str] = None 
+    
     class Config:
         allow_population_by_field_name = True
         json_encoders = {ObjectId: str}
-
 
 class UserCreate(BaseModel):
     email: str
