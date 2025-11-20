@@ -45,9 +45,7 @@ nav {
   overflow: hidden;   /* This prevents the circles from spilling out */
 }
 
-./* --- New Animation Code --- */
 
-/* 1. Define the animation keyframes */
 @keyframes pulse-fade {
   0% {
     opacity: 0.0; /* Start almost invisible */
@@ -94,4 +92,39 @@ nav {
   background-color: rgba(244, 114, 182, 1); /* Opacity is now handled by the animation */
   bottom: -100px;
   right: -100px;
+}
+
+@keyframes slideUpFade {
+    0% {
+        opacity: 0;
+        transform: translateY(20px); /* Start slightly lower (near input) */
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: slideUpFade 0.4s ease-out forwards;
+}
+
+@keyframes messageSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px); /* Start 20px lower (near the input) */
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);    /* End at normal position */
+  }
+}
+
+.animate-message-entry {
+  animation: messageSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Ensure the chat container scrolls smoothly */
+#chat-messages {
+    scroll-behavior: smooth;
 }

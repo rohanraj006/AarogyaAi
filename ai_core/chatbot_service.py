@@ -66,27 +66,58 @@ class MedicalChatbot:
         if not self.model: return "AI model is not initialized."
 
         user_doc = patient_data.get('user_doc', {})
-        medical_record = patient_data.get('medical_record', {})
+        user_type = user_doc.get('user_type', 'patient') # Detect user type
+        
+        # --- LOGIC BRANCH: DOCTOR VS PATIENT ---
+        
+        if user_type == 'doctor':
+            # Context for DOCTORS
+            doctor_name = f"{user_doc.get('name', {}).get('first', '')} {user_doc.get('name', {}).get('last', '')}"
+            patient_list = user_doc.get('patient_list', [])
+            
+            system_instruction = (
+                f"You are a smart medical assistant named Aarogya AI, assisting Dr. {doctor_name}. "
+                "Your goal is to help the doctor manage their practice and patients efficiently. "
+                "You have access to the doctor's profile and their list of connected patients below. "
+                "If the doctor asks for their patient list, you SHOULD provide it based on the data below."
+                "do not confuse with doctor with a patient"
+            )
+            
+            data_context = f"""
+            --- DOCTOR PROFILE ---
+            Name: Dr. {doctor_name}
+            ID: {user_doc.get('aarogya_id')}
+            Specialization: {user_doc.get('specialization', 'General')}
+            
+            --- CONNECTED PATIENTS LIST ---
+            {', '.join(patient_list) if patient_list else 'No patients connected yet.'}
+            """
+            
+        else:
+            # Context for PATIENTS (Existing Logic)
+            medical_record = patient_data.get('medical_record', {})
+            patient_info_str = self._format_patient_data(user_doc)
+            medical_record_str = json.dumps(medical_record, indent=2)
+            
+            system_instruction = (
+                "You are a helpful and empathetic medical AI assistant chatbot named Aarogya. "
+                "You are talking directly to the patient. "
+                "Your primary goal is to answer the user's questions clearly, empathetically, and safely. "
+                "If a user asks for a prescription or diagnosis, you MUST offer a safe, non-medical suggestion and advise them to consult a doctor."
+            )
+            
+            data_context = f"""
+            --- PATIENT STRUCTURED DATA ---
+            {patient_info_str}
+            {medical_record_str}
+            """
 
-        patient_info_str = self._format_patient_data(user_doc)
-        medical_record_str = json.dumps(medical_record, indent=2) # Send JSON of the structured record
-
-        system_instruction = (
-            "You are a helpful and empathetic medical AI assistant chatbot named Aarogya. "
-            "Your primary goal is to answer the user's questions clearly, empathetically, and safely. "
-            "You MUST prioritize information from the user's personal documents in the 'CONTEXT' section "
-            "and their structured data in the 'PATIENT STRUCTURED DATA' section to tailor your response. "
-            "If a user asks for a prescription or diagnosis, you MUST offer a safe, non-medical suggestion and offer to contact a doctor."
-        )
-
+        # Combine into full prompt
         full_prompt = f"""{system_instruction}
 
---- PATIENT STRUCTURED DATA (Diagnoses, Medications, etc.) ---
-{patient_info_str}
-{medical_record_str}
----
+{data_context}
 
---- CONTEXT FROM USER'S DOCUMENTS (Pinecone RAG) ---
+--- CONTEXT FROM KNOWLEDGE BASE (RAG) ---
 {chat_context}
 ---
 

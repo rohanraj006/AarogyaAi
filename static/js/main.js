@@ -861,3 +861,54 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 });
+
+document.addEventListener('submit', function(event) {
+    // 1. Check if the submitted form is our chat form
+    if (event.target && event.target.id === 'chatForm') {
+        event.preventDefault(); // CRITICAL: Stops page refresh
+        
+        const form = event.target;
+        const formData = new FormData(form);
+        const chatContainer = document.getElementById('chat-messages');
+        const userQuery = formData.get('query');
+
+        // 2. Show User Message Immediately (UI Optimism)
+        if (userQuery) {
+            const tempDiv = document.createElement('div');
+            tempDiv.className = "flex flex-col space-y-2 mb-4";
+            tempDiv.innerHTML = `
+                <div class="self-end bg-indigo-100 text-indigo-900 p-3 rounded-2xl rounded-tr-none max-w-[85%] text-sm shadow-sm border border-indigo-200">
+                    ${userQuery}
+                </div>
+                <div id="ai-thinking" class="self-start text-gray-400 text-xs ml-2 flex items-center">
+                    <svg class="animate-spin h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    Thinking...
+                </div>
+            `;
+            chatContainer.appendChild(tempDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            form.reset(); // Clear input
+        }
+
+        // 3. Send to Backend
+        fetch('/chat', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text())
+        .then(html => {
+            // Remove "Thinking..."
+            const thinking = document.getElementById('ai-thinking');
+            if (thinking) thinking.parentElement.remove();
+
+            // Append Real Response
+            chatContainer.insertAdjacentHTML('beforeend', html);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        })
+        .catch(error => {
+            console.error("Chat Error:", error);
+            const thinking = document.getElementById('ai-thinking');
+            if (thinking) thinking.innerHTML = "<span class='text-red-500'>Error connecting to AI.</span>";
+        });
+    }
+});

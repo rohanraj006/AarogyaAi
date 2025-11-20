@@ -6,7 +6,11 @@
   <title>{% block title %}Aarogya AI{% endblock %}</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
   <script>
     tailwind.config = {
       theme: {
@@ -135,30 +139,17 @@
   </main>
 
   <div id="aiBubble" class="fixed right-6 bottom-6 z-50">
-    <button id="openChatBtn" aria-label="AarogyaAi" class="w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transform hover:scale-[1.1] transition">
+    <button id="openChatBtn" onclick="document.getElementById('chatPanel').classList.remove('hidden')" aria-label="AarogyaAi" class="w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transform hover:scale-[1.1] transition">
       </button>
 
-    <div id="chatPanel" class="hidden mt-3 w-96 md:w-[420px] rounded-2xl overflow-hidden shadow-2xl glass-shell">
-      <div class="flex items-center gap-3 p-4 border-b">
-        <div class="w-10 h-10 rounded-lg bg-white/40 flex items-center justify-center">
-          <strong class="text-sm">AI</strong>
-        </div>
-        <div class="flex-1">
-          <div class="text-sm font-semibold">Aarogya Assistant</div>
-          <div class="text-xs text-slate-500">Your private medical helper</div>
-        </div>
-        <button id="closeChatBtn" class="p-2 rounded-md hover:bg-white/10" title="Close chat">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
+    <div id="chatPanel" 
+         class="hidden mt-3 w-96 md:w-[420px] rounded-2xl overflow-hidden shadow-2xl glass-shell"
+         hx-get="/ai/chat/widget"
+         hx-trigger="revealed"> <div id="chatContent" class="h-72 overflow-y-auto p-4 space-y-3 text-sm bg-white/5">
+        <div class="text-xs text-slate-400 text-center">Loading Assistant...</div>
       </div>
 
-      <div id="chatContent" class="h-72 overflow-y-auto p-4 space-y-3 text-sm bg-white/5">
-        <div class="text-xs text-slate-400">Start a conversation — this chat is tied to your account.</div>
-      </div>
-
-      <div class="p-3 border-t flex gap-2 items-center">
+      <div class="p-3 border-t flex gap-2 items-center hidden"> 
         <input id="chatInput" type="text" placeholder="Ask about reports, symptoms, or get a summary..." class="flex-1 rounded-lg p-3 bg-white/10 focus:outline-none" />
         <button id="sendChatBtn" class="btn-primary px-4 py-2 rounded-lg">Send</button>
       </div>
