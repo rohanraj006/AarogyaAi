@@ -62,10 +62,12 @@
             {% if user %}
               {% if user.user_type == 'patient' %}
                 <a href="/profile" class="nav-link">Dashboard</a>
+                <a href="/user/profile" class="nav-link">My Profile</a>
                 <a href="/reports" class="nav-link">My Reports</a>
                 <a href="/appointments" class="nav-link">Appointments</a>
               {% elif user.user_type == 'doctor' %}
                 <a href="/doctor/dashboard" class="nav-link">Dashboard</a>
+                <a href="/user/profile" class="nav-link">My Profile</a>
                 <a href="/appointments" class="nav-link">Appointments</a>
               {% endif %}
             {% endif %}
@@ -76,8 +78,12 @@
         <div class="flex items-center gap-3">
           {% if user %}
             <div class="hidden md:flex items-center gap-3">
-              <span class="text-sm text-slate-600">Hi, <strong>{{ user.first_name or user.email }}</strong></span>
-              <button id="logoutBtn" class="btn-secondary px-4 py-2 rounded-lg shadow-soft-sm" title="Logout">Logout</button>
+              <a href="/user/profile" class="text-sm text-slate-600 hover:text-indigo-600 transition-colors flex items-center gap-2 group">
+                <span>Hi, <strong class="group-hover:underline">{{ user.name.first if user.name else user.email }}</strong></span>
+              </a>
+              <button id="logoutBtn" class="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors shadow-sm" title="Logout">
+                Logout
+              </button>
             </div>
             <button id="mobileMenuBtn" class="md:hidden p-2 rounded-lg glass-card shadow-soft" aria-label="open menu">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,10 +110,12 @@
           {% if user %}
             {% if user.user_type == 'patient' %}
               <a href="/profile" class="mobile-link">Dashboard</a>
+              <a href="/user/profile" class="nav-link">My Profile</a>
               <a href="/reports" class="mobile-link">My Reports</a>
               <a href="/appointments" class="mobile-link">Appointments</a>
             {% elif user.user_type == 'doctor' %}
               <a href="/doctor/dashboard" class="mobile-link">Dashboard</a>
+              <a href="/user/profile" class="nav-link">My Profile</a>
               <a href="/appointments" class="mobile-link">Appointments</a>
             {% endif %}
             <button id="mobileLogout" class="mobile-link text-left">Logout</button>

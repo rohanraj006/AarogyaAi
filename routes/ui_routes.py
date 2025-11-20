@@ -148,6 +148,21 @@ async def get_ai_chat_widget(
     }
     return templates.TemplateResponse("ai_chat_widget.html", context)
 
+@router.get("/user/profile", response_class=HTMLResponse)
+async def user_profile_page(
+    current_user: User = Depends(get_current_authenticated_user),
+    base_context: Dict[str, Any] = Depends(get_base_template_context)
+):
+    """Renders the dedicated Profile page for both Doctors and Patients."""
+    context = {
+        "title": "My Profile",
+        "user": current_user,
+        "user_json": current_user.model_dump_json(by_alias=True),
+        **base_context
+    }
+    return templates.TemplateResponse("profile_page.html", context)
+
+
 @router.get("/doctor/patient/{patient_aarogya_id}", response_class=HTMLResponse)
 async def doctor_view_patient_page(
     patient_aarogya_id: str,
@@ -166,3 +181,4 @@ async def doctor_view_patient_page(
         **base_context
     }
     return templates.TemplateResponse("doctor_patient_records.html", context)
+
