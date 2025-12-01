@@ -8,25 +8,42 @@
     <div class="pb-8 border-b border-gray-200">
       <h1 class="text-3xl font-bold text-gray-900">Manage Appointments</h1>
       {% if user.user_type == 'doctor' %}
-        <p class="mt-2 text-lg text-gray-600">Review and confirm pending appointment requests from your patients.</p>
+        <p class="mt-2 text-lg text-gray-600">Review requests and manage your schedule.</p>
       {% else %}
-        <p class="mt-2 text-lg text-gray-600">Book and manage your appointments with connected doctors.</p>
+        <p class="mt-2 text-lg text-gray-600">Book and view your medical appointments.</p>
       {% endif %}
     </div>
 
     <div class="mt-8">
       {% if user.user_type == 'doctor' %}
-        <div id="doctor-appointments-view">
-          <h2 class="text-2xl font-semibold text-gray-800 mb-6">Pending Requests</h2>
-          <div id="pending-requests-container" class="space-y-4">
-            <div id="pending-loader" class="text-center text-gray-500">Loading requests...</div>
+        <div id="doctor-appointments-view" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          <div>
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                <span class="bg-yellow-100 text-yellow-800 text-sm font-medium mr-2 px-2.5 py-0.5 rounded">Action Needed</span>
+                Pending Requests
+            </h2>
+            <div id="pending-requests-container" class="space-y-4">
+              <div id="pending-loader" class="text-center text-gray-500 py-4">Loading requests...</div>
             </div>
+          </div>
+
+          <div>
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                <span class="bg-green-100 text-green-800 text-sm font-medium mr-2 px-2.5 py-0.5 rounded">Scheduled</span>
+                Upcoming Appointments
+            </h2>
+            <div id="upcoming-appointments-container" class="space-y-4">
+               <div id="upcoming-loader" class="text-center text-gray-500 py-4">Loading appointments...</div>
+            </div>
+          </div>
+
         </div>
 
       {% elif user.user_type == 'patient' %}
         <div id="patient-appointments-view" class="grid grid-cols-1 md:grid-cols-2 gap-8">
           
-          <div class="bg-white p-6 rounded-2xl shadow-md">
+          <div class="bg-white p-6 rounded-2xl shadow-md h-fit">
             <h2 class="text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">Book a New Appointment</h2>
             <form id="requestAppointmentForm" class="space-y-4">
               <div>
@@ -43,6 +60,15 @@
                 <label for="patient-notes" class="block text-sm font-medium text-gray-700">Symptoms/Notes</label>
                 <textarea id="patient-notes" name="patient_notes" rows="3" required placeholder="Please describe your symptoms or provide any notes for the doctor." class="mt-1 block w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
               </div>
+              
+              <div>
+                 <button type="button" id="start-recording" class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    Record Symptoms (Voice)
+                 </button>
+                 <p id="recording-status" class="text-xs text-gray-500 mt-1 hidden">Listening...</p>
+              </div>
+
               <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                 Send Appointment Request
               </button>
@@ -51,8 +77,8 @@
 
           <div class="bg-white p-6 rounded-2xl shadow-md">
             <h2 class="text-2xl font-semibold text-gray-800 border-b pb-3 mb-6">My Appointments</h2>
-            <div class="text-center text-gray-500">
-              <p>Your upcoming and past appointments will be listed here.</p>
+            <div id="my-appointments-container" class="space-y-4 overflow-y-auto max-h-[600px]">
+               <div id="my-appt-loader" class="text-center text-gray-500">Loading history...</div>
             </div>
           </div>
         </div>

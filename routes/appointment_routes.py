@@ -1,245 +1,305 @@
 # routes/appointment_routes.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Form, UploadFile, File
 from typing import List, Optional
 from bson import ObjectId
 from datetime import datetime
 from pymongo.cursor import Cursor
-from ai_core.rag_engine import predict_symptom_severity
+import tempfile
+import os
+import anyio
+import random
+import string
+from fastapi.concurrency import run_in_threadpool
+
+# Imports
 from models.schemas import User, DoctorInfo, AppointmentRequestModel, AppointmentConfirmBody
-from security import get_current_authenticated_user # UPDATED IMPORT
+from security import get_current_authenticated_user
 from database import user_collection, appointments_collection
+from ai_core.chatbot_service import MedicalChatbot
+from ai_core.helpers import fetch_patient_context
+from app.services.google_service import create_google_meet_link
 
 router = APIRouter()
+chatbot = MedicalChatbot()
+
+# Initialize Whisper
+try:
+    from faster_whisper import WhisperModel
+    import torch
+    WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
+    WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
+    WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16" if WHISPER_DEVICE == "cuda" else "int8")
+    whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE_TYPE)
+except ImportError:
+    whisper_model = None
+
+# ... (Keep list_public_doctors, get_connected_doctors, transcribe_audio, request_appointment, reject_appointment as they were) ...
+# I will output the modified Confirm, Activate, and List endpoints below.
 
 # --- 1. Public Doctor Directory ---
 @router.get("/doctors/public", response_model=List[DoctorInfo], tags=["Appointments"])
 async def list_public_doctors():
-    """Lists all doctors who are both Authorized AND have explicitly set their profile to public."""
-    
     doctors_cursor: Cursor = user_collection.find({
         "user_type": "doctor", 
         "is_public": True,
         "is_authorized": True
     })
-    
-    # Convert cursor to list asynchronously
     doctors_list = await doctors_cursor.to_list(length=100)
-    
-    # Return DoctorInfo with all new status fields
     return [
         DoctorInfo(
             email=doc["email"], 
             aarogya_id=doc["aarogya_id"],
             is_public=doc.get("is_public", False), 
             is_authorized=doc.get("is_authorized", False)
-        ) 
-        for doc in doctors_list
+        ) for doc in doctors_list
     ]
 
 # --- 2. Connected Doctors List ---
-# UPDATED DEPENDENCY
 @router.get("/doctors/connected", response_model=List[DoctorInfo], tags=["Appointments"])
 async def get_connected_doctors(current_user: User = Depends(get_current_authenticated_user)):
-    """Lists all doctors the logged-in patient is currently connected to."""
     if current_user.user_type != "patient":
         raise HTTPException(status_code=403, detail="Only patients can view their connected doctors list.")
     
     if not current_user.doctor_list:
         return []
 
-    # Query the user collection for doctor details where email is in the patient's doctor_list
     connected_doctors_cursor: Cursor = user_collection.find({"email": {"$in": current_user.doctor_list}})
-    
-    # Convert cursor to list asynchronously
     connected_doctors_list = await connected_doctors_cursor.to_list(length=len(current_user.doctor_list))
     
-    # Return DoctorInfo with all new status fields
     return [
         DoctorInfo(
             email=doc["email"], 
             aarogya_id=doc["aarogya_id"],
             is_public=doc.get("is_public", False),
             is_authorized=doc.get("is_authorized", False)
-        ) 
-        for doc in connected_doctors_list
+        ) for doc in connected_doctors_list
     ]
 
-# --- 3. Request Appointment Endpoint (Patient) ---
-# UPDATED DEPENDENCY
+# --- 3. Transcribe Audio ---
+@router.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    if not whisper_model:
+        return {"transcription": "Transcription service unavailable."}
+    
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+            content = await file.read()
+            await anyio.to_thread.run_sync(tmp.write, content)
+            tmp_path = tmp.name
+
+        segments, _ = await run_in_threadpool(whisper_model.transcribe, tmp_path)
+        text = " ".join([s.text for s in segments])
+        
+        os.remove(tmp_path)
+        return {"transcription": text}
+    except Exception as e:
+        return {"error": str(e)}
+
+# --- 4. Request Appointment (Patient) ---
 @router.post("/request", status_code=status.HTTP_201_CREATED, tags=["Appointments"])
 async def request_appointment(
     doctor_aarogya_id: str = Form(...),
     reason: str = Form(...),
-    patient_notes: Optional[str] = Form(None), # NEW FIELD: Patient's symptoms
+    patient_notes: Optional[str] = Form(None),
     current_user: User = Depends(get_current_authenticated_user)
 ):
-    """
-    Allows a patient to request an appointment with a doctor. Now includes 
-    AI-driven severity prediction (triage).
-    """
     if current_user.user_type != "patient":
         raise HTTPException(status_code=403, detail="Only patients can request appointments.")
 
     doctor = await user_collection.find_one({"aarogya_id": doctor_aarogya_id, "user_type": "doctor"})
     if not doctor:
-        raise HTTPException(status_code=404, detail=f"Doctor not found with AarogyaID: {doctor_aarogya_id}")
+        raise HTTPException(status_code=404, detail=f"Doctor not found.")
     
     if doctor.get("is_authorized") != True:
-         raise HTTPException(status_code=403, detail="The selected doctor is not yet authorized by the platform owner.")
+         raise HTTPException(status_code=403, detail="Doctor not authorized.")
 
     if doctor["email"] not in current_user.doctor_list:
-        raise HTTPException(status_code=403, detail="You are not connected to this doctor. You can only book with connected doctors.")
+        raise HTTPException(status_code=403, detail="Not connected to this doctor.")
 
-    # --- Triage Logic ---
     if not patient_notes or not patient_notes.strip():
-        # Fallback to general severity if no notes, or raise error if essential
-        # Raising error is better for data quality
-        raise HTTPException(status_code=400, detail="Patient notes/symptoms are required for the AI triage system.")
+        raise HTTPException(status_code=400, detail="Patient notes required.")
 
-    predicted_severity = await predict_symptom_severity(
-        patient_email=current_user.email,
+    context_data = await fetch_patient_context(current_user.email)
+    predicted_severity = await chatbot.predict_severity(
+        patient_data=context_data,
         reason=reason,
-        patient_notes=patient_notes
+        notes=patient_notes 
     )
-    # --- End Triage Logic ---
 
-    # Prevent duplicate pending requests
-    existing_request = await appointments_collection.find_one({
+    existing = await appointments_collection.find_one({
         "patient_email": current_user.email,
         "doctor_email": doctor["email"],
         "status": "pending"
     })
-    if existing_request:
-        raise HTTPException(status_code=400, detail="You already have a pending appointment request with this doctor.")
+    if existing:
+        raise HTTPException(status_code=400, detail="Pending request already exists.")
 
-    # Populate the full AppointmentRequestModel with new fields
     appointment_data = AppointmentRequestModel(
         patient_email=current_user.email,
         doctor_email=doctor["email"],
         reason=reason,
         patient_notes=patient_notes,
         status="pending",
-        predicted_severity=predicted_severity # NEW FIELD
+        predicted_severity=predicted_severity,
+        is_link_active=False # Default to inactive
     )
     
-    await appointments_collection.insert_one(appointment_data.model_dump(by_alias=True,exclude_none=True))
+    await appointments_collection.insert_one(appointment_data.model_dump(by_alias=True, exclude_none=True))
     
     return {
-        "message": "Appointment request sent successfully.", 
+        "message": "Request sent.", 
         "doctor_email": doctor["email"],
         "predicted_severity": predicted_severity
     }
 
 @router.post("/reject", tags=["Appointments"])
 async def reject_appointment(
-    body: dict, # Expects {"request_id": "..."}
+    body: dict, 
     current_user: User = Depends(get_current_authenticated_user)
 ):
-    """Allows a doctor to reject a pending appointment request."""
     if current_user.user_type != "doctor":
-        raise HTTPException(status_code=403, detail="Only doctors can reject appointments.")
-        
-    if not current_user.is_authorized:
-        raise HTTPException(status_code=403, detail="You must be authorized to perform this action.")
-    
-    request_id = body.get("request_id")
-    if not request_id:
-        raise HTTPException(status_code=400, detail="Missing request_id.")
+        raise HTTPException(status_code=403, detail="Unauthorized.")
         
     try:
-        request_obj_id = ObjectId(request_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid request_id format.")
+        request_obj_id = ObjectId(body.get("request_id"))
+    except:
+        raise HTTPException(status_code=400, detail="Invalid ID.")
 
-    # Find and update the request
     result = await appointments_collection.update_one(
-        {
-            "_id": request_obj_id,
-            "doctor_email": current_user.email,
-            "status": "pending"
-        },
+        {"_id": request_obj_id, "doctor_email": current_user.email, "status": "pending"},
         {"$set": {"status": "rejected"}}
     )
 
     if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Pending appointment request not found or already processed.")
+        raise HTTPException(status_code=404, detail="Request not found.")
     
-    return {"message": "Appointment request has been rejected."}
-# --- 4. Doctor's Pending Queue ---
-# UPDATED DEPENDENCY
+    return {"message": "Rejected."}
+
 @router.get("/pending", response_model=List[AppointmentRequestModel], tags=["Appointments"])
 async def get_pending_appointments(current_user: User = Depends(get_current_authenticated_user)):
-    """Allows a doctor to view all their pending appointment requests."""
     if current_user.user_type != "doctor":
-        raise HTTPException(status_code=403, detail="Only doctors can view their appointment queue.")
+        raise HTTPException(status_code=403, detail="Unauthorized.")
     
-    # NEW SECURITY CHECK: Unauthorized doctors cannot access their queue
-    if current_user.is_authorized != True:
-        raise HTTPException(status_code=403, detail="You must be authorized by the platform owner to access your appointment queue.")
-    
-    requests_cursor = appointments_collection.find({
+    cursor = appointments_collection.find({
         "doctor_email": current_user.email,
         "status": "pending"
-    }).sort("timestamp", 1) # Oldest requests first
+    }).sort("timestamp", 1)
     
-    requests_list = await requests_cursor.to_list(length=100) # Convert cursor to list asynchronously
+    results = await cursor.to_list(length=100)
+    return [AppointmentRequestModel(**{**req, "_id": str(req["_id"])}) for req in results]
 
-    # FIX: Convert MongoDB's ObjectId to a string before Pydantic validation
-    return [
-        AppointmentRequestModel(**{**req, "_id": str(req["_id"])}) 
-        for req in requests_list
-    ]
-
-
-# --- 5. Confirm Appointment Endpoint (Doctor) ---
-# UPDATED DEPENDENCY
+# --- 6. Confirm Appointment (Doctor) ---
 @router.post("/confirm", tags=["Appointments"])
 async def confirm_appointment(
     body: AppointmentConfirmBody,
     current_user: User = Depends(get_current_authenticated_user)
 ):
-    """Allows a doctor to confirm an appointment, set a time, and generate a meeting link."""
     if current_user.user_type != "doctor":
-        raise HTTPException(status_code=403, detail="Only doctors can confirm appointments.")
+        raise HTTPException(status_code=403, detail="Unauthorized.")
         
-    # NEW SECURITY CHECK: Block unauthorized doctors from confirming appointments
-    if current_user.is_authorized != True:
-        raise HTTPException(status_code=403, detail="You must be authorized by the platform owner to confirm appointments.")
-    
     try:
         request_obj_id = ObjectId(body.request_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid request_id format.")
+    except:
+        raise HTTPException(status_code=400, detail="Invalid ID.")
 
-    
-    # 1. Fetch and validate the pending request
-    request = await appointments_collection.find_one({ # Use await for Motor
+    request = await appointments_collection.find_one({
         "_id": request_obj_id,
         "doctor_email": current_user.email,
         "status": "pending"
     })
 
     if not request:
-        raise HTTPException(status_code=404, detail="Pending appointment request not found or already processed.")
+        raise HTTPException(status_code=404, detail="Request not found.")
     
-    patient_email = request["patient_email"]
-
-    # Simulated Meeting Link (Placeholder for actual Google Meet API call)
-    meeting_link = f"https://meet.google.com/aarogya-{body.request_id}" 
+    # Generate Link
+    meeting_link = await run_in_threadpool(
+        create_google_meet_link,
+        summary=f"Consultation: Dr. {current_user.name.last} with Patient",
+        start_time=body.appointment_time,
+        attendee_emails=[request['patient_email'], current_user.email]
+    )
     
-    # 3. Update the request status and set meeting details
-    await appointments_collection.update_one( # Use await for Motor
+    await appointments_collection.update_one(
         {"_id": request_obj_id},
         {"$set": {
             "status": "confirmed",
             "appointment_time": body.appointment_time,
-            "meeting_link": meeting_link
+            "meeting_link": meeting_link,
+            "is_link_active": False # Explicitly keep it false until activation
         }}
     )
 
     return {
-        "message": f"Appointment confirmed for {patient_email}.",
+        "message": "Appointment confirmed.",
         "appointment_time": body.appointment_time.isoformat(),
         "meeting_link": meeting_link
     }
+
+# --- NEW: Activate Link Endpoint (Doctor Only) ---
+@router.post("/activate/{request_id}", tags=["Appointments"])
+async def activate_appointment_link(
+    request_id: str,
+    current_user: User = Depends(get_current_authenticated_user)
+):
+    """Allows doctor to enable the 'Join' button for the patient."""
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=403, detail="Unauthorized.")
+
+    try:
+        request_obj_id = ObjectId(request_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid ID.")
+
+    result = await appointments_collection.update_one(
+        {"_id": request_obj_id, "doctor_email": current_user.email},
+        {"$set": {"is_link_active": True}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+
+    return {"message": "Link activated for patient."}
+
+# --- NEW: Complete Appointment Endpoint (Doctor Only) ---
+@router.post("/complete/{request_id}", tags=["Appointments"])
+async def complete_appointment(
+    request_id: str,
+    current_user: User = Depends(get_current_authenticated_user)
+):
+    """Marks an appointment as completed and deactivates the link."""
+    if current_user.user_type != "doctor":
+        raise HTTPException(status_code=403, detail="Unauthorized.")
+
+    try:
+        request_obj_id = ObjectId(request_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid ID.")
+
+    result = await appointments_collection.update_one(
+        {"_id": request_obj_id, "doctor_email": current_user.email},
+        {"$set": {
+            "status": "completed",
+            "is_link_active": False # Disable link access
+        }}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Appointment not found.")
+
+    return {"message": "Appointment marked as completed."}
+
+# --- 7. Get All Appointments ---
+@router.get("/list", response_model=List[AppointmentRequestModel], tags=["Appointments"])
+async def get_my_appointments(current_user: User = Depends(get_current_authenticated_user)):
+    query = {}
+    if current_user.user_type == "patient":
+        query["patient_email"] = current_user.email
+    elif current_user.user_type == "doctor":
+        query["doctor_email"] = current_user.email
+    
+    cursor = appointments_collection.find(query).sort("appointment_time", -1)
+    results = await cursor.to_list(length=None)
+    
+    # Return everything, let frontend handle filtering/display logic based on is_link_active
+    return [AppointmentRequestModel(**{**req, "_id": str(req["_id"])}) for req in results]

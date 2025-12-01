@@ -69,10 +69,13 @@
                 <a href="/user/profile" class="nav-link">My Profile</a>
                 <a href="/reports" class="nav-link">My Reports</a>
                 <a href="/appointments" class="nav-link">Appointments</a>
+                <a href="/ai/consultation" class="nav-link text-indigo-600 font-semibold">AI Assistant</a>
+                <a href="/patient/wellness" class="mobile-link text-green-600 font-semibold">Wellness Plan</a>
               {% elif user.user_type == 'doctor' %}
                 <a href="/doctor/dashboard" class="nav-link">Dashboard</a>
                 <a href="/user/profile" class="nav-link">My Profile</a>
                 <a href="/appointments" class="nav-link">Appointments</a>
+                <a href="/ai/consultation" class="nav-link text-indigo-600 font-semibold">AI Assistant</a>
               {% endif %}
             {% endif %}
           </div>
@@ -117,10 +120,13 @@
               <a href="/user/profile" class="nav-link">My Profile</a>
               <a href="/reports" class="mobile-link">My Reports</a>
               <a href="/appointments" class="mobile-link">Appointments</a>
+              <a href="/patient/wellness" class="mobile-link text-green-600 font-semibold">Wellness Plan</a>
+              <a href="/ai/consultation" class="nav-link text-indigo-600 font-semibold">AI Assistant</a>
             {% elif user.user_type == 'doctor' %}
               <a href="/doctor/dashboard" class="mobile-link">Dashboard</a>
               <a href="/user/profile" class="nav-link">My Profile</a>
               <a href="/appointments" class="mobile-link">Appointments</a>
+              <a href="/ai/consultation" class="nav-link text-indigo-600 font-semibold">AI Assistant</a>
             {% endif %}
             <button id="mobileLogout" class="mobile-link text-left">Logout</button>
           {% else %}

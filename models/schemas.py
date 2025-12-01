@@ -192,11 +192,11 @@ class AppointmentRequestModel(BaseModel):
     patient_email: str
     doctor_email: str 
     reason: str
-    status: Literal["pending", "confirmed","rejected"]
+    status: str 
     meeting_link: Optional[str] = None
     appointment_time: Optional[datetime]= None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    # NEW FIELDS
+    is_link_active: bool = False
     patient_notes: Optional[str] = None
     predicted_severity: Optional[str] = None
 
