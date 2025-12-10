@@ -165,6 +165,7 @@ class ChatMessageBase(BaseModel):
     user_query: str
     ai_response: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    patient_id: Optional[str] = None
 
 class ChatMessage(ChatMessageBase):
     owner_email: str

@@ -1,171 +1,443 @@
 {% extends "base.html" %}
 
-{% block title %}AI Consultation | Aarogya AI{% endblock %}
+{% block title %}Consultation Room | Aarogya AI{% endblock %}
 
 {% block content %}
-<div class="min-h-[calc(100vh-80px)] bg-gray-50 flex flex-col md:flex-row">
+<div class="flex flex-col h-[calc(100vh-64px)] bg-gray-50">
     
-    <div class="w-full md:w-80 bg-white border-r border-gray-200 p-6 hidden md:flex flex-col">
-        <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-            <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            About Aarogya AI
-        </h2>
-        
-        {% if user.user_type == 'doctor' %}
-        <div class="mb-6 p-4 bg-indigo-50 rounded-xl border border-indigo-100 shadow-sm">
-            <label for="patientSelect" class="block text-sm font-bold text-indigo-900 mb-2">Select Patient Context</label>
-            <p class="text-xs text-indigo-700 mb-3">Choose a patient to ask questions about their specific medical records.</p>
-            <div class="relative">
-                <select name="patient_id" id="patientSelect" class="block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
-                    <option value="">-- General / Myself --</option>
+    {% if user.user_type == 'doctor' %}
+    <div class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm z-20">
+        <div class="flex items-center gap-4 w-full max-w-3xl">
+            <div class="relative w-full">
+                <select id="patientSelector" onchange="onPatientSelect(this.value)" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm transition-shadow">
+                    <option value="">-- Select Patient to Start Consultation --</option>
                     {% for patient in patients %}
-                        <option value="{{ patient._id }}">{{ patient.name.first }} {{ patient.name.last }} ({{ patient.aarogya_id }})</option>
+                        <option value="{{ patient._id }}" data-aarogya-id="{{ patient.aarogya_id }}">
+                            {{ patient.name.first }} {{ patient.name.last }} ({{ patient.aarogya_id }})
+                        </option>
                     {% endfor %}
                 </select>
             </div>
+        </div>
+        <div class="text-sm text-gray-500 hidden md:block">
+            <span id="consultationStatus">Waiting for selection...</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div id="mainWorkspace" class="flex-1 flex flex-col overflow-hidden relative {% if user.user_type == 'doctor' %}opacity-50 pointer-events-none filter blur-[1px]{% endif %} transition-all duration-300">
+        
+        {% if user.user_type == 'doctor' %}
+        <div class="bg-indigo-50 border-b border-indigo-100 px-4 flex gap-2 overflow-x-auto">
+            <button onclick="switchTab('ai')" id="tab-ai" class="active-tab px-4 py-3 text-sm font-medium text-indigo-700 border-b-2 border-indigo-600">
+                AI Assistant
+            </button>
+            <button onclick="switchTab('prescription')" id="tab-prescription" class="px-4 py-3 text-sm font-medium text-gray-500 hover:text-indigo-600 border-b-2 border-transparent hover:border-indigo-300 transition-colors">
+                Write Prescription
+            </button>
+            <button onclick="switchTab('diagnosis')" id="tab-diagnosis" class="px-4 py-3 text-sm font-medium text-gray-500 hover:text-indigo-600 border-b-2 border-transparent hover:border-indigo-300 transition-colors">
+                Dictation & Reports
+            </button>
+            <button onclick="switchTab('overview')" id="tab-overview" class="px-4 py-3 text-sm font-medium text-gray-500 hover:text-indigo-600 border-b-2 border-transparent hover:border-indigo-300 transition-colors">
+                Patient Overview
+            </button>
         </div>
         {% endif %}
 
-        <div class="space-y-6 text-sm text-gray-600">
-            <p>
-                This is your personal AI medical assistant. It has access to medical history, reports, and profiles.
-            </p>
-            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <h3 class="font-semibold text-gray-800 mb-2">Capabilities</h3>
-                <ul class="list-disc list-inside space-y-1">
-                    <li>Answer health questions</li>
-                    <li>Summarize patient reports</li>
-                    <li>Explain medical terms</li>
-                    <li>Check symptoms (Triage)</li>
-                </ul>
-            </div>
-            <div class="bg-yellow-50 p-4 rounded-xl border border-yellow-100">
-                <h3 class="font-semibold text-yellow-800 mb-2">Disclaimer</h3>
-                <p>AI responses are for informational purposes only. Always consult a doctor for diagnosis.</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="flex-1 flex flex-col h-[calc(100vh-80px)]">
-        
-        <div class="md:hidden bg-white border-b border-gray-200 p-4 flex flex-col shadow-sm z-10">
-            <div class="flex items-center justify-between">
-                <span class="font-bold text-gray-800">Aarogya Assistant</span>
-                <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">Beta</span>
-            </div>
-            {% if user.user_type == 'doctor' %}
-            <div class="mt-3">
-                <select id="patientSelectMobile" class="block w-full text-sm border-gray-300 rounded-md shadow-sm" onchange="document.getElementById('patientSelect').value = this.value">
-                    <option value="">-- Select Patient Context --</option>
-                    {% for patient in patients %}
-                        <option value="{{ patient._id }}">{{ patient.name.first }} {{ patient.name.last }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% endif %}
-        </div>
-
-        <div id="full-chat-messages" 
-             class="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 scroll-smooth pb-24"
-             hx-get="/ai/chat/history" 
-             hx-trigger="load" 
-             hx-swap="innerHTML">
-             <div class="flex flex-col items-center justify-center h-full space-y-3 opacity-50">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                <p class="text-sm font-medium text-gray-500">Loading conversation history...</p>
-             </div>
-        </div>
-
-        <div class="bg-white border-t border-gray-200 p-4 md:p-6 shadow-lg z-20">
-            <form id="fullChatForm" 
-                  hx-post="/ai/chat" 
-                  hx-target="#full-chat-messages" 
-                  hx-swap="beforeend scroll:bottom"
-                  hx-include="#patientSelect" 
-                  class="max-w-4xl mx-auto relative flex items-center gap-3">
-                
-                <div class="relative flex-1">
-                    <input type="text" 
-                           id="queryInput"
-                           name="query" 
-                           placeholder="Ask about health, reports, or symptoms..." 
-                           required 
-                           autocomplete="off"
-                           class="w-full pl-5 pr-12 py-4 bg-gray-50 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-800 placeholder-gray-400 shadow-sm transition-all">
-                    
-                    <button type="submit" class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-all shadow-md active:scale-95">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+        <div class="flex-1 overflow-y-auto p-4 md:p-6">
+            
+            <div id="view-ai" class="view-section h-full flex flex-col max-w-4xl mx-auto">
+                {% if user.user_type == 'doctor' %}
+                <div id="historyControl" class="flex justify-center mb-4">
+                    <button id="loadHistoryBtn" class="hidden text-xs bg-indigo-50 text-indigo-700 px-4 py-2 rounded-full border border-indigo-200 hover:bg-indigo-100 transition shadow-sm flex items-center gap-2" onclick="loadSpecificHistory()">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Load Previous Chat History
                     </button>
                 </div>
+                {% endif %}
 
-                <input type="hidden" name="action" value="ask">
-            </form>
-            <p class="text-center text-xs text-gray-400 mt-2">Aarogya AI can make mistakes. Consider checking important information.</p>
+                <div id="full-chat-messages" class="flex-1 overflow-y-auto space-y-4 pb-4 pr-2" {% if user.user_type == 'patient' %} hx-get="/ai/chat/history" hx-trigger="load" hx-swap="innerHTML" {% endif %}>
+                    {% if user.user_type == 'doctor' %}
+                    <div class="text-center text-gray-400 mt-20"><p>Select a patient above to start consultation.</p></div>
+                    {% else %}
+                    <div class="flex justify-center items-center h-full"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
+                    {% endif %}
+                </div>
+
+                <div class="mt-4 bg-white p-2 rounded-2xl shadow-lg border border-gray-200">
+                    <form id="chatForm" class="flex items-center gap-2">
+                        <input type="text" id="queryInput" placeholder="Ask about symptoms, reports, or medical history..." class="flex-1 border-none focus:ring-0 text-gray-700 bg-transparent px-4 py-2" autocomplete="off">
+                        {% if user.user_type == 'doctor' %}
+                        <button type="button" onclick="triggerSummary()" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full tooltip" title="Summarize Record">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                        </button>
+                        {% endif %}
+                        <button type="submit" class="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 shadow-md transition-transform active:scale-95">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {% if user.user_type == 'doctor' %}
+            <div id="view-prescription" class="view-section hidden max-w-3xl mx-auto">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Write Prescription
+                    </h2>
+                    <form id="rxForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Medication Name</label>
+                                <input type="text" name="medication" placeholder="e.g. Paracetamol" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3 border" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Dosage</label>
+                                <input type="text" name="dosage" placeholder="e.g. 500mg" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3 border" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Frequency</label>
+                                <input type="text" name="frequency" placeholder="e.g. 1-0-1 (After Food)" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3 border" required>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700">Notes / Instructions</label>
+                                <textarea name="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3 border"></textarea>
+                            </div>
+                        </div>
+                        <div class="flex justify-end pt-4">
+                            <button type="submit" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 shadow-md font-medium transition flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                Save to Record
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if user.user_type == 'doctor' %}
+            <div id="view-diagnosis" class="view-section hidden max-w-5xl mx-auto">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    <div class="space-y-6">
+                         <div class="bg-white rounded-2xl shadow-sm border border-indigo-100 p-6 relative overflow-hidden">
+                             <div class="absolute top-0 right-0 p-2 opacity-5 pointer-events-none">
+                                <svg class="w-40 h-40" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/></svg>
+                             </div>
+                             <h3 class="font-bold text-indigo-900 mb-2">1. Dictate Notes</h3>
+                             <p class="text-xs text-gray-500 mb-4">Record your diagnosis or observations.</p>
+                             
+                             <div class="flex gap-4 mb-4">
+                                <button id="startDocRecordBtn" class="flex-1 bg-red-50 text-red-600 border border-red-200 py-3 rounded-lg hover:bg-red-100 flex items-center justify-center gap-2 font-medium transition">
+                                    <div class="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div> Start Recording
+                                </button>
+                                <button id="stopDocRecordBtn" class="hidden flex-1 bg-gray-800 text-white py-3 rounded-lg hover:bg-gray-900 transition">Stop & Transcribe</button>
+                             </div>
+                             <div id="docRecordingStatus" class="hidden text-center text-xs text-red-500 font-mono mb-2">Recording... <span id="docTimer">0:00</span></div>
+                         </div>
+
+                         <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                            <h3 class="font-bold text-gray-800 mb-2">2. Review & Edit</h3>
+                            <textarea id="dictationInput" rows="8" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3 border" placeholder="Transcribed text will appear here. You can also type manually..."></textarea>
+                            <button onclick="generateReport()" class="mt-3 w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 font-medium transition shadow-sm">
+                                Generate Structured Report
+                            </button>
+                         </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 flex flex-col h-full">
+                        <h3 class="font-bold text-gray-800 mb-2">3. Generated Medical Report</h3>
+                        <p class="text-xs text-gray-500 mb-4">AI-formatted professional report ready for saving.</p>
+                        
+                        <div id="reportPreview" class="flex-1 bg-gray-50 rounded-xl border border-gray-200 p-4 text-sm overflow-y-auto mb-4 font-mono text-gray-700 min-h-[300px]">
+                            <span class="text-gray-400 italic">Report preview will appear here...</span>
+                        </div>
+                        
+                        <button id="saveParsedBtn" onclick="saveParsedReport()" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            Save & Update Record
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+            {% endif %}
+
+            {% if user.user_type == 'doctor' %}
+             <div id="view-overview" class="view-section hidden max-w-4xl mx-auto">
+                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center" id="overview-content">
+                     <p class="text-gray-500">Select a patient to view details.</p>
+                 </div>
+             </div>
+             {% endif %}
+
         </div>
     </div>
 </div>
 
 <script>
-    const chatForm = document.getElementById('fullChatForm');
-    const chatContainer = document.getElementById("full-chat-messages");
-    const queryInput = document.getElementById("queryInput");
+    // ==========================================
+    // GLOBAL STATE
+    // ==========================================
+    let currentPatientId = null; // MongoDB ID (for Chat)
+    let currentAarogyaId = null; // Aarogya ID (for Doctor API calls)
 
-    // 1. Initial Scroll on Load
-    document.body.addEventListener('htmx:afterOnLoad', function(evt) {
-        if(evt.detail.elt.id === 'full-chat-messages') {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-    });
+    // ==========================================
+    // 1. UI LOGIC (Tabs & Selection)
+    // ==========================================
+    function switchTab(tabName) {
+        document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+        document.getElementById('view-' + tabName).classList.remove('hidden');
+        
+        // Reset Active States
+        const tabs = ['ai', 'prescription', 'diagnosis', 'overview'];
+        tabs.forEach(t => {
+            const btn = document.getElementById('tab-' + t);
+            if(btn) {
+                if(t === tabName) {
+                    btn.classList.add('text-indigo-700', 'border-indigo-600');
+                    btn.classList.remove('text-gray-500', 'border-transparent');
+                } else {
+                    btn.classList.remove('text-indigo-700', 'border-indigo-600');
+                    btn.classList.add('text-gray-500', 'border-transparent');
+                }
+            }
+        });
+    }
 
-    // 2. Handle Submit: Add User Message & Thinking Bubble Immediately
-    chatForm.addEventListener('htmx:configRequest', function(evt) {
-        const text = queryInput.value.trim();
-        if(!text) {
-            evt.preventDefault();
+    function onPatientSelect(mongoId) {
+        const workspace = document.getElementById('mainWorkspace');
+        const statusSpan = document.getElementById('consultationStatus');
+        const selectEl = document.getElementById('patientSelector');
+
+        if (!mongoId) {
+            workspace.classList.add('opacity-50', 'pointer-events-none', 'filter', 'blur-[1px]');
+            statusSpan.innerText = "Waiting for selection...";
+            currentPatientId = null;
             return;
         }
 
-        // A. Add User Message
-        const userHtml = `
-        <div class="flex flex-col space-y-4 mb-6 animate-fade-in">
-            <div class="self-end bg-indigo-600 text-white px-5 py-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-md">
-                <p class="text-sm">${text}</p>
-            </div>
-        </div>`;
-        chatContainer.insertAdjacentHTML('beforeend', userHtml);
-
-        // B. Add Thinking Bubble (ID used to remove it later)
-        const thinkingHtml = `
-        <div id="ai-thinking-bubble" class="flex flex-col space-y-4 mb-6 animate-pulse">
-            <div class="self-start bg-gray-100 border border-gray-200 text-gray-500 px-5 py-3 rounded-2xl rounded-tl-none max-w-[85%] shadow-sm">
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold uppercase tracking-wider">Aarogya AI</span>
-                </div>
-                <div class="text-sm flex items-center gap-2 mt-1">
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
-                </div>
-            </div>
-        </div>`;
-        chatContainer.insertAdjacentHTML('beforeend', thinkingHtml);
+        currentPatientId = mongoId;
+        currentAarogyaId = selectEl.options[selectEl.selectedIndex].getAttribute('data-aarogya-id');
         
-        // C. Scroll & Clear Input
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-        queryInput.value = '';
+        workspace.classList.remove('opacity-50', 'pointer-events-none', 'filter', 'blur-[1px]');
+        statusSpan.innerText = `Consulting: ${selectEl.options[selectEl.selectedIndex].text}`;
+        
+        // Reset Chat
+        document.getElementById('full-chat-messages').innerHTML = '<div class="text-center text-gray-400 mt-20"><p>Session started. Load history or type to chat.</p></div>';
+        const hBtn = document.getElementById('loadHistoryBtn');
+        if(hBtn) hBtn.classList.remove('hidden');
+
+        fetchOverviewData();
+    }
+
+    async function fetchOverviewData() {
+        try {
+            const res = await fetch(`/doctor/api/patients/search?aarogya_id=${currentAarogyaId}`);
+            const data = await res.json();
+            const ov = document.getElementById('overview-content');
+            if(ov) ov.innerHTML = `
+                <div class="text-left space-y-2">
+                    <h3 class="text-xl font-bold">${data.name.first} ${data.name.last}</h3>
+                    <p class="text-gray-600"><span class="font-bold">Email:</span> ${data.email}</p>
+                    <p class="text-gray-600"><span class="font-bold">Aarogya ID:</span> ${data.aarogya_id}</p>
+                </div>`;
+        } catch(e) {}
+    }
+
+    // ==========================================
+    // 2. DOCTOR DICTATION LOGIC (Unified ID)
+    // ==========================================
+    const docStartBtn = document.getElementById('startDocRecordBtn');
+    const docStopBtn = document.getElementById('stopDocRecordBtn');
+    const docStatus = document.getElementById('docRecordingStatus');
+    const docTimer = document.getElementById('docTimer');
+    const dictationInput = document.getElementById('dictationInput'); // Unified Input ID
+
+    let docRecorder;
+    let docChunks = [];
+    let docTimerInterval;
+
+    if(docStartBtn) {
+        docStartBtn.onclick = async () => {
+            if(!currentAarogyaId) return alert("Select a patient first.");
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                docRecorder = new MediaRecorder(stream);
+                docChunks = [];
+                docRecorder.ondataavailable = e => docChunks.push(e.data);
+                docRecorder.onstop = processDocAudio;
+                docRecorder.start();
+                
+                docStartBtn.classList.add('hidden');
+                docStopBtn.classList.remove('hidden');
+                docStatus.classList.remove('hidden');
+                
+                let sec = 0;
+                docTimerInterval = setInterval(() => {
+                    sec++;
+                    let mins = Math.floor(sec / 60);
+                    let secs = sec % 60;
+                    docTimer.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                }, 1000);
+            } catch(e) { alert("Microphone access denied: " + e.message); }
+        };
+    }
+
+    if(docStopBtn) {
+        docStopBtn.onclick = () => {
+            if(docRecorder) docRecorder.stop();
+            clearInterval(docTimerInterval);
+            docStartBtn.classList.remove('hidden');
+            docStopBtn.classList.add('hidden');
+            docStatus.classList.add('hidden');
+        };
+    }
+
+    async function processDocAudio() {
+        const blob = new Blob(docChunks, { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append('audio_file', blob, 'recording.wav');
+
+        dictationInput.value = "Transcribing audio...";
+        
+        try {
+            const res = await fetch(`/doctor/patient/${currentAarogyaId}/transcribe`, { method: 'POST', body: formData });
+            const data = await res.json();
+            dictationInput.value = data.transcription || "No text detected.";
+        } catch(e) {
+            dictationInput.value = "Error: " + e.message;
+        }
+    }
+
+    // ==========================================
+    // 3. AI REPORT GENERATION
+    // ==========================================
+    async function generateReport() {
+        const text = dictationInput.value; // Read from unified ID
+        if(!text || text.includes("Transcribing")) return alert("Please dictate or type notes first.");
+        
+        document.getElementById('reportPreview').innerHTML = '<div class="animate-pulse text-indigo-600">AI is structuring the report...</div>';
+        
+        try {
+            const res = await fetch(`/doctor/patient/${currentAarogyaId}/generate-report-text`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ transcribed_text: text })
+            });
+            const data = await res.json();
+            document.getElementById('reportPreview').innerText = data.report_text; 
+            document.getElementById('saveParsedBtn').disabled = false;
+        } catch(e) {
+            document.getElementById('reportPreview').innerHTML = `<span class="text-red-500">Error: ${e.message}</span>`;
+        }
+    }
+
+    async function saveParsedReport() {
+        const content = document.getElementById('reportPreview').innerText;
+        const btn = document.getElementById('saveParsedBtn');
+        btn.innerText = "Saving...";
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(`/doctor/patient/${currentAarogyaId}/save-parsed-report`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ content_text: content })
+            });
+            
+            if(res.ok) {
+                Swal.fire('Success', 'Report saved and medical record updated.', 'success');
+                dictationInput.value = '';
+                document.getElementById('reportPreview').innerHTML = '<span class="text-gray-400 italic">Report preview will appear here...</span>';
+            } else { throw new Error("Save failed"); }
+        } catch(e) {
+            Swal.fire('Error', e.message, 'error');
+        } finally {
+            btn.innerText = "Save & Update Record";
+            btn.disabled = false;
+        }
+    }
+
+    // ==========================================
+    // 4. CHAT & PRESCRIPTION
+    // ==========================================
+    async function loadSpecificHistory() {
+        if (!currentPatientId) return;
+        const container = document.getElementById('full-chat-messages');
+        container.innerHTML = '<div class="flex justify-center p-4"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div></div>';
+        try {
+            const res = await fetch(`/ai/chat/history?patient_id=${currentPatientId}`);
+            const html = await res.text();
+            container.innerHTML = html;
+            container.scrollTop = container.scrollHeight;
+            document.getElementById('loadHistoryBtn').classList.add('hidden');
+        } catch(e) {
+            container.innerHTML = '<div class="text-red-500 text-center">Failed to load history.</div>';
+        }
+    }
+
+    document.getElementById('chatForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('queryInput');
+        const text = input.value.trim();
+        if(!text) return;
+        
+        const container = document.getElementById('full-chat-messages');
+        container.insertAdjacentHTML('beforeend', `<div class="flex flex-col space-y-4 mb-6"><div class="self-end bg-indigo-600 text-white px-5 py-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-md"><p class="text-sm">${text}</p></div></div>`);
+        container.scrollTop = container.scrollHeight;
+        
+        const formData = new URLSearchParams();
+        formData.append('query', text);
+        formData.append('action', 'ask');
+        if(currentPatientId) formData.append('patient_id', currentPatientId);
+        
+        input.value = '';
+        
+        try {
+            const res = await fetch('/ai/chat', { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: formData });
+            const html = await res.text();
+            container.insertAdjacentHTML('beforeend', html);
+            container.scrollTop = container.scrollHeight;
+        } catch(e) {}
     });
 
-    // 3. Cleanup After AI Responds
-    chatForm.addEventListener('htmx:afterRequest', function(evt) {
-        // Remove the thinking bubble
-        const thinking = document.getElementById('ai-thinking-bubble');
-        if(thinking) thinking.remove();
-        
-        // Re-focus input so you can type again immediately
-        queryInput.focus();
-        
-        // Scroll to the new message
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-    });
+    async function triggerSummary() {
+         if (!currentPatientId) return alert("Select a patient first.");
+         const container = document.getElementById('full-chat-messages');
+         container.insertAdjacentHTML('beforeend', `<div class="text-center text-xs text-gray-400 my-4">-- Generating Summary --</div>`);
+         const formData = new URLSearchParams();
+         formData.append('query', 'Summarize');
+         formData.append('action', 'summarize');
+         formData.append('patient_id', currentPatientId);
+         const res = await fetch('/ai/chat', { method: 'POST', body: formData });
+         const html = await res.text();
+         container.insertAdjacentHTML('beforeend', html);
+         container.scrollTop = container.scrollHeight;
+    }
+
+    const rxForm = document.getElementById('rxForm');
+    if(rxForm) {
+        rxForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if(!currentAarogyaId) return alert("Please select a patient.");
+            const data = {
+                doctor_id: "{{ user.email }}",
+                medication: rxForm.medication.value,
+                dosage: rxForm.dosage.value,
+                frequency: rxForm.frequency.value,
+                date: new Date().toISOString(),
+                refillable: false, refill_count: 0,
+                notes: rxForm.notes.value
+            };
+            try {
+                const res = await fetch(`/doctor/patient/${currentAarogyaId}/prescribe`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+                });
+                if(res.ok) { Swal.fire('Saved', 'Prescription added.', 'success'); rxForm.reset(); }
+                else { throw new Error('Failed to save'); }
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        });
+    }
 </script>
 {% endblock %}

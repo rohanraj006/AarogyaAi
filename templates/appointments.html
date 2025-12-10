@@ -85,4 +85,127 @@
       {% endif %}
     </div>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", async function() {
+    
+    // 1. LOAD DOCTORS
+    const doctorSelect = document.getElementById('doctor-select');
+    if (doctorSelect) {
+        try {
+            const res = await fetch('/appointments/doctors/connected');
+            const doctors = await res.json();
+            
+            if (doctors.length === 0) {
+                doctorSelect.innerHTML = '<option value="">No connected doctors found.</option>';
+            } else {
+                doctorSelect.innerHTML = '<option value="">-- Select a Doctor --</option>';
+                doctors.forEach(doc => {
+                    doctorSelect.innerHTML += `<option value="${doc.aarogya_id}">Dr. ${doc.email} (ID: ${doc.aarogya_id})</option>`;
+                });
+            }
+        } catch(e) {
+            console.error(e);
+            doctorSelect.innerHTML = '<option value="">Error loading doctors</option>';
+        }
+    }
+
+    // 2. FORM SUBMISSION
+    const form = document.getElementById("requestAppointmentForm");
+    if (form) {
+        form.addEventListener("submit", async function(e) {
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.innerText = "Sending...";
+
+            const formData = new FormData(form);
+            
+            try {
+                const res = await fetch('/appointments/request', {
+                    method: 'POST',
+                    body: formData 
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    Swal.fire('Success', 'Appointment request sent!', 'success').then(() => window.location.reload());
+                } else {
+                    throw new Error(data.detail || 'Failed to request');
+                }
+            } catch(e) {
+                Swal.fire('Error', e.message, 'error');
+                btn.disabled = false;
+                btn.innerText = "Send Appointment Request";
+            }
+        });
+    }
+
+    // 3. RECORD SYMPTOMS (FIXED LOGIC)
+    const recordBtn = document.getElementById("start-recording");
+    const notesField = document.getElementById("patient-notes");
+    const statusText = document.getElementById("recording-status");
+    let mediaRecorder;
+    let audioChunks = [];
+    let isRecording = false; // Track state explicitly
+
+    if (recordBtn) {
+        recordBtn.addEventListener("click", async () => {
+            
+            if (!isRecording) {
+                // START
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+                    mediaRecorder.onstop = uploadAudio;
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    
+                    recordBtn.innerHTML = `<span class="animate-pulse text-red-600 font-bold">■ Stop Recording</span>`;
+                    statusText.classList.remove("hidden");
+                    statusText.innerText = "Recording... (Click to Stop)";
+                } catch (e) {
+                    alert("Microphone access needed: " + e.message);
+                }
+            } else {
+                // STOP
+                if (mediaRecorder) {
+                    mediaRecorder.stop();
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                }
+                isRecording = false;
+                recordBtn.innerHTML = `Record Symptoms (Voice)`;
+                statusText.innerText = "Processing...";
+            }
+        });
+    }
+
+    async function uploadAudio() {
+        const blob = new Blob(audioChunks, { type: 'audio/wav' });
+        const formData = new FormData();
+        formData.append("file", blob, "symptoms.wav");
+
+        try {
+            const res = await fetch("/appointments/transcribe", {
+                method: "POST",
+                body: formData
+            });
+            const data = await res.json();
+            
+            if (data.transcription) {
+                const currentText = notesField.value;
+                notesField.value = currentText ? currentText + " " + data.transcription : data.transcription;
+                statusText.classList.add("hidden");
+            } else {
+                statusText.innerText = "No text detected.";
+            }
+        } catch (e) {
+            statusText.innerText = "Error transcribing.";
+        }
+    }
+});
+</script>
 {% endblock %}
