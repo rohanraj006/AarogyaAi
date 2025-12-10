@@ -63,26 +63,40 @@ class MedicalChatbot:
         formatted_data += f"Contact: {doctor_data.get('email', 'N/A')}"
         return formatted_data
 
-    async def generate_response(self, patient_data: dict, query: str) -> str:
+    # --- MODIFIED: generate_response accepts asking_user ---
+    async def generate_response(self, patient_data: dict, query: str, asking_user: dict) -> str:
         """
-        Generates a response for patient queries using direct context injection (No RAG).
+        Generates a response using direct context injection.
+        Now context-aware: Knows if user is Doctor or Patient.
         """
         if not self.model: return "AI model is not initialized."
 
         user_doc = patient_data.get('user_doc', {})
         medical_record = patient_data.get('medical_record', {})
         
-        # Build Context String
+        # Build Data Strings
         patient_info_str = self._format_patient_data(user_doc)
-        # Convert medical record to string safely
         medical_record_str = json.dumps(medical_record, indent=2, default=str)
         
-        system_instruction = (
-            "You are Aarogya, a helpful and empathetic medical AI assistant. "
-            "You are answering a patient's question based strictly on their medical data provided below. "
-            "Do not invent medical history. If the answer is not in the data, say so. "
-            "Keep answers concise and safe. Always advise consulting a doctor for new symptoms."
-        )
+        # --- DYNAMIC SYSTEM INSTRUCTION ---
+        user_type = asking_user.get("user_type", "patient")
+        asker_name = f"{asking_user.get('name', {}).get('first', '')} {asking_user.get('name', {}).get('last', '')}"
+
+        if user_type == "doctor":
+            system_instruction = (
+                f"You are Aarogya, a medical AI assistant helping Dr. {asker_name}. "
+                "You are analyzing the medical records of the patient described below. "
+                "Your tone should be professional, clinical, and concise. "
+                "Highlight medical insights, potential red flags, and answer the doctor's specific queries strictly based on the data. "
+                "Do NOT invent medical history."
+            )
+        else:
+            system_instruction = (
+                f"You are Aarogya, a helpful and empathetic medical AI assistant helping {asker_name}. "
+                "You are answering questions based strictly on their own medical data provided below. "
+                "Explain medical terms simply. Do not invent medical history. "
+                "If the answer is not in the data, say so. Always advise consulting a doctor for new symptoms."
+            )
         
         full_prompt = f"""{system_instruction}
 

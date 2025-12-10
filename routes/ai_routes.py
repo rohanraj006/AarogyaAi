@@ -77,7 +77,7 @@ async def chat_endpoint(
                 print(f"Error resolving patient ID: {e}")
         # --------------------------------------
 
-        # 1. Fetch Context
+        # 1. Fetch Context of the Target (Patient)
         context = await fetch_patient_context(target_email)
 
         # 2. Process Intent
@@ -90,7 +90,9 @@ async def chat_endpoint(
             query_to_save = f"[Summary Request] {query_to_save}"
         
         elif action == 'ask':
-            ai_response_text = await chatbot.generate_response(context, query)
+            # --- MODIFIED: Pass current_user dict to generate_response ---
+            asking_user_dict = current_user.model_dump(by_alias=True)
+            ai_response_text = await chatbot.generate_response(context, query, asking_user_dict)
         
         # 3. Save to DB (We still save BOTH to history)
         chat_message = ChatMessage(
