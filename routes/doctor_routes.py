@@ -124,7 +124,17 @@ async def search_for_patient(
         "_id": str(patient["_id"]), 
         "aarogya_id": patient["aarogya_id"],
         "email": patient["email"],
-        "name": patient_name
+        "name": patient_name,
+        "age": patient.get("age"),
+        "gender": patient.get("gender"),
+        "phone_number": patient.get("phone_number"),
+        "blood_group": patient.get("blood_group"),
+        "address": patient.get("address"),
+        "emergency_contact": patient.get("emergency_contact"),
+        "medical_conditions": patient.get("medical_conditions"),
+        "allergies": patient.get("allergies"),
+        "current_medications": patient.get("current_medications"),
+        "registration_date": patient.get("registration_date")
     }
 
 @router.get("/my-patients", response_model=List[User])
@@ -232,6 +242,45 @@ async def save_prescription(
     )
     
     return {"message": "Prescription saved successfully."}
+
+@router.get("/patient/{patient_id}/reports", tags=["Doctor"])
+async def get_patient_reports(
+    patient_id: str,
+    current_user: User = Depends(get_current_doctor)
+):
+    """Fetches list of reports for a patient, sorted by newest first."""
+    # 1. Find Patient
+    patient = await user_collection.find_one({"aarogya_id": patient_id})
+    if not patient:
+         try: patient = await user_collection.find_one({"_id": ObjectId(patient_id)})
+         except: pass
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+
+    # 2. Get Medical Record
+    record = await medical_records_collection.find_one({"patient_id": patient["email"]})
+    if not record:
+        return []
+
+    # 3. Return Reports (Sorted by date desc)
+    reports = record.get("reports", [])
+    reports.sort(key=lambda x: x.get("upload_date", ""), reverse=True)
+    return reports
+
+@router.get("/report/content/{content_id}", tags=["Doctor"])
+async def get_report_content(
+    content_id: str,
+    current_user: User = Depends(get_current_doctor)
+):
+    """Fetches the text content of a parsed report."""
+    try:
+        content = await report_contents_collection.find_one({"_id": ObjectId(content_id)})
+        if content:
+            return {"content": content.get("content_text", "No content text found.")}
+        else:
+            return {"content": "Content not found."}
+    except:
+        raise HTTPException(status_code=400, detail="Invalid Content ID")
 
 # --- REPORT GENERATION ---
 @router.post("/patient/{patient_id}/generate-report-text", tags=["Doctor"])

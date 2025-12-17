@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from datetime import datetime
 from typing import Optional
 from bson import ObjectId
+from markdown_it import MarkdownIt
 
 # Security & Database
 from security import get_current_authenticated_user
@@ -19,6 +20,7 @@ from ai_core.helpers import fetch_patient_context
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 chatbot = MedicalChatbot()
+md = MarkdownIt()
 
 @router.get("/consultation", response_class=HTMLResponse)
 async def get_ai_consultation_page(
@@ -90,6 +92,9 @@ async def chat_endpoint(
         await chat_messages_collection.insert_one(chat_message.model_dump())
 
         # 4. Return HTML
+        # Convert Markdown to HTML using MarkdownIt
+        html_response = md.render(ai_response_text)
+
         return HTMLResponse(f"""
         <div class="flex flex-col space-y-4 mb-6 animate-fade-in">
             <div class="self-start bg-white border border-gray-100 text-gray-800 px-5 py-3 rounded-2xl rounded-tl-none max-w-[85%] shadow-sm">
@@ -97,7 +102,7 @@ async def chat_endpoint(
                     <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Aarogya AI</span>
                 </div>
                 <div class="prose prose-sm text-gray-700 leading-relaxed max-w-none">
-                    {ai_response_text.replace('\n', '<br>')}
+                    {html_response}
                 </div>
             </div>
         </div>

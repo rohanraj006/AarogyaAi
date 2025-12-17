@@ -38,6 +38,9 @@
             <button onclick="switchTab('diagnosis')" id="tab-diagnosis" class="px-4 py-3 text-sm font-medium text-gray-500 hover:text-indigo-600 border-b-2 border-transparent hover:border-indigo-300 transition-colors">
                 Dictation & Reports
             </button>
+             <button onclick="switchTab('reports')" id="tab-reports" class="px-4 py-3 text-sm font-medium text-gray-500 hover:text-indigo-600 border-b-2 border-transparent hover:border-indigo-300 transition-colors">
+                Patient Records
+            </button>
             <button onclick="switchTab('overview')" id="tab-overview" class="px-4 py-3 text-sm font-medium text-gray-500 hover:text-indigo-600 border-b-2 border-transparent hover:border-indigo-300 transition-colors">
                 Patient Overview
             </button>
@@ -164,9 +167,24 @@
             {% endif %}
 
             {% if user.user_type == 'doctor' %}
+             <div id="view-reports" class="view-section hidden max-w-4xl mx-auto">
+                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                     <div class="flex justify-between items-center mb-6">
+                         <h3 class="font-bold text-xl text-gray-800">Patient Records History</h3>
+                         <span class="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Sorted by Newest</span>
+                     </div>
+                     
+                     <div id="reports-list-container" class="overflow-y-auto max-h-[600px] space-y-3">
+                         <p class="text-center text-gray-400 italic py-10">Select a patient to view records.</p>
+                     </div>
+                 </div>
+             </div>
+             {% endif %}
+
+            {% if user.user_type == 'doctor' %}
              <div id="view-overview" class="view-section hidden max-w-4xl mx-auto">
-                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center" id="overview-content">
-                     <p class="text-gray-500">Select a patient to view details.</p>
+                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8" id="overview-content">
+                     <p class="text-center text-gray-500">Select a patient to view details.</p>
                  </div>
              </div>
              {% endif %}
@@ -175,12 +193,29 @@
     </div>
 </div>
 
+<div id="reportModal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex justify-center items-center backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 flex flex-col h-[80vh] animate-fade-in-up">
+        <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg text-gray-800" id="modalTitle">Report View</h3>
+            <button onclick="closeReportModal()" class="text-gray-500 hover:text-red-500 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="p-8 overflow-y-auto flex-1 font-mono text-sm leading-relaxed text-gray-700" id="modalContent">
+            Loading content...
+        </div>
+        <div class="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
+            <button onclick="closeReportModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium transition">Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
     // ==========================================
     // GLOBAL STATE
     // ==========================================
-    let currentPatientId = null; // MongoDB ID (for Chat)
-    let currentAarogyaId = null; // Aarogya ID (for Doctor API calls)
+    let currentPatientId = null; 
+    let currentAarogyaId = null;
 
     // ==========================================
     // 1. UI LOGIC (Tabs & Selection)
@@ -189,8 +224,7 @@
         document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
         document.getElementById('view-' + tabName).classList.remove('hidden');
         
-        // Reset Active States
-        const tabs = ['ai', 'prescription', 'diagnosis', 'overview'];
+        const tabs = ['ai', 'prescription', 'diagnosis', 'overview', 'reports'];
         tabs.forEach(t => {
             const btn = document.getElementById('tab-' + t);
             if(btn) {
@@ -203,6 +237,11 @@
                 }
             }
         });
+
+        // Auto-fetch if switching to Reports tab
+        if(tabName === 'reports' && currentAarogyaId) {
+            fetchPatientReports();
+        }
     }
 
     function onPatientSelect(mongoId) {
@@ -223,12 +262,14 @@
         workspace.classList.remove('opacity-50', 'pointer-events-none', 'filter', 'blur-[1px]');
         statusSpan.innerText = `Consulting: ${selectEl.options[selectEl.selectedIndex].text}`;
         
-        // Reset Chat
         document.getElementById('full-chat-messages').innerHTML = '<div class="text-center text-gray-400 mt-20"><p>Session started. Load history or type to chat.</p></div>';
         const hBtn = document.getElementById('loadHistoryBtn');
         if(hBtn) hBtn.classList.remove('hidden');
 
         fetchOverviewData();
+        // Clear reports list until tab is clicked to save bandwidth, or pre-fetch
+        document.getElementById('reports-list-container').innerHTML = '<p class="text-center text-gray-400 py-4">Loading...</p>';
+        fetchPatientReports(); 
     }
 
     async function fetchOverviewData() {
@@ -236,23 +277,138 @@
             const res = await fetch(`/doctor/api/patients/search?aarogya_id=${currentAarogyaId}`);
             const data = await res.json();
             const ov = document.getElementById('overview-content');
+            
+            const val = (v) => v || '<span class="text-gray-400 italic">N/A</span>';
+
             if(ov) ov.innerHTML = `
-                <div class="text-left space-y-2">
-                    <h3 class="text-xl font-bold">${data.name.first} ${data.name.last}</h3>
-                    <p class="text-gray-600"><span class="font-bold">Email:</span> ${data.email}</p>
-                    <p class="text-gray-600"><span class="font-bold">Aarogya ID:</span> ${data.aarogya_id}</p>
+                <div class="text-left space-y-6">
+                    <div class="border-b pb-4 flex justify-between items-end">
+                        <div>
+                            <h3 class="text-3xl font-bold text-gray-800">${data.name.first} ${data.name.last}</h3>
+                            <p class="text-sm text-gray-500 mt-1">Aarogya ID: <span class="font-mono font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">${data.aarogya_id}</span></p>
+                        </div>
+                        <div class="text-right">
+                             <p class="text-xs text-gray-400">Registered</p>
+                             <p class="text-sm text-gray-600 font-medium">${data.registration_date ? new Date(data.registration_date).toLocaleDateString() : 'N/A'}</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-3">
+                            <h4 class="text-xs text-gray-400 uppercase font-bold tracking-wider">Personal Details</h4>
+                            <div class="grid grid-cols-2 gap-2 text-sm">
+                                <span class="text-gray-500">Age:</span> <span class="font-medium text-gray-800">${val(data.age)}</span>
+                                <span class="text-gray-500">Gender:</span> <span class="font-medium text-gray-800">${val(data.gender)}</span>
+                                <span class="text-gray-500">Blood Group:</span> <span class="font-medium text-gray-800">${val(data.blood_group)}</span>
+                                <span class="text-gray-500">Contact:</span> <span class="font-medium text-gray-800">${val(data.phone_number)}</span>
+                                <span class="text-gray-500">Email:</span> <span class="font-medium text-gray-800 break-words">${val(data.email)}</span>
+                            </div>
+                        </div>
+                        <div class="space-y-3">
+                            <h4 class="text-xs text-gray-400 uppercase font-bold tracking-wider">Emergency Contact</h4>
+                            ${data.emergency_contact ? 
+                                `<div class="bg-red-50 p-3 rounded-lg border border-red-100">
+                                    <p class="font-bold text-red-800 text-sm">${data.emergency_contact.name}</p>
+                                    <p class="text-xs text-red-600">${data.emergency_contact.relationship}</p>
+                                    <p class="text-sm text-red-700 mt-1 font-mono">${data.emergency_contact.phone}</p>
+                                 </div>` 
+                                : '<div class="bg-gray-50 p-3 rounded text-sm text-gray-500 italic">No emergency contact info.</div>'}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <h4 class="font-bold text-gray-700 text-sm mb-2">Allergies</h4>
+                            <p class="text-sm text-gray-600">${val(data.allergies)}</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <h4 class="font-bold text-gray-700 text-sm mb-2">Medical Conditions</h4>
+                            <p class="text-sm text-gray-600">${val(data.medical_conditions)}</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <h4 class="font-bold text-gray-700 text-sm mb-2">Current Medications</h4>
+                            <p class="text-sm text-gray-600">${val(data.current_medications)}</p>
+                        </div>
+                    </div>
                 </div>`;
-        } catch(e) {}
+        } catch(e) {
+            console.error(e);
+            document.getElementById('overview-content').innerHTML = '<p class="text-red-500">Error loading patient details.</p>';
+        }
     }
 
     // ==========================================
-    // 2. DOCTOR DICTATION LOGIC (Unified ID)
+    // 2. REPORT MANAGEMENT (NEW)
+    // ==========================================
+    async function fetchPatientReports() {
+        if(!currentAarogyaId) return;
+        const container = document.getElementById('reports-list-container');
+        
+        try {
+            const res = await fetch(`/doctor/patient/${currentAarogyaId}/reports`);
+            const reports = await res.json();
+            
+            if(!reports || reports.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-300"><p class="text-gray-500">No medical records found for this patient.</p></div>';
+                return;
+            }
+
+            let html = '';
+            reports.forEach(r => {
+                const dateStr = r.date ? new Date(r.date).toLocaleDateString() : 'Unknown Date';
+                const type = r.report_type || 'General Report';
+                const desc = r.description || 'No description';
+                const contentId = r.content_id; // For fetching text content
+
+                html += `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 p-4 rounded-xl border border-gray-100 hover:shadow-md transition gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                             <span class="px-2 py-0.5 rounded text-xs font-bold uppercase ${type.includes('AI') ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-700'}">${type}</span>
+                             <span class="text-xs text-gray-400">${dateStr}</span>
+                        </div>
+                        <p class="text-sm font-medium text-gray-800 mt-1">${desc}</p>
+                    </div>
+                    <button onclick="viewReport('${contentId}', '${type}')" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition shadow-sm font-medium flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        View Content
+                    </button>
+                </div>`;
+            });
+            container.innerHTML = html;
+        } catch(e) {
+            container.innerHTML = '<p class="text-red-500">Error loading reports.</p>';
+        }
+    }
+
+    async function viewReport(contentId, title) {
+        const modal = document.getElementById('reportModal');
+        const contentDiv = document.getElementById('modalContent');
+        document.getElementById('modalTitle').innerText = title || "Report View";
+        
+        modal.classList.remove('hidden');
+        contentDiv.innerHTML = '<div class="flex justify-center h-full items-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>';
+
+        try {
+            const res = await fetch(`/doctor/report/content/${contentId}`);
+            const data = await res.json();
+            // Simple replace of newlines to br for basic formatting
+            contentDiv.innerHTML = data.content ? data.content.replace(/\n/g, '<br>') : 'Content not available.';
+        } catch(e) {
+            contentDiv.innerHTML = '<p class="text-red-500">Failed to load content.</p>';
+        }
+    }
+
+    function closeReportModal() {
+        document.getElementById('reportModal').classList.add('hidden');
+    }
+
+    // ==========================================
+    // 3. DOCTOR DICTATION LOGIC
     // ==========================================
     const docStartBtn = document.getElementById('startDocRecordBtn');
     const docStopBtn = document.getElementById('stopDocRecordBtn');
     const docStatus = document.getElementById('docRecordingStatus');
     const docTimer = document.getElementById('docTimer');
-    const dictationInput = document.getElementById('dictationInput'); // Unified Input ID
+    const dictationInput = document.getElementById('dictationInput'); 
 
     let docRecorder;
     let docChunks = [];
@@ -311,10 +467,10 @@
     }
 
     // ==========================================
-    // 3. AI REPORT GENERATION
+    // 4. AI REPORT GENERATION
     // ==========================================
     async function generateReport() {
-        const text = dictationInput.value; // Read from unified ID
+        const text = dictationInput.value;
         if(!text || text.includes("Transcribing")) return alert("Please dictate or type notes first.");
         
         document.getElementById('reportPreview').innerHTML = '<div class="animate-pulse text-indigo-600">AI is structuring the report...</div>';
@@ -347,9 +503,11 @@
             });
             
             if(res.ok) {
-                Swal.fire('Success', 'Report saved and medical record updated.', 'success');
+                Swal.fire('Success', 'Report saved.', 'success');
                 dictationInput.value = '';
                 document.getElementById('reportPreview').innerHTML = '<span class="text-gray-400 italic">Report preview will appear here...</span>';
+                // Refresh reports list if we are on that tab
+                fetchPatientReports();
             } else { throw new Error("Save failed"); }
         } catch(e) {
             Swal.fire('Error', e.message, 'error');
@@ -360,7 +518,7 @@
     }
 
     // ==========================================
-    // 4. CHAT & PRESCRIPTION
+    // 5. CHAT & PRESCRIPTION
     // ==========================================
     async function loadSpecificHistory() {
         if (!currentPatientId) return;
