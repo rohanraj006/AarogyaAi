@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+
+{% block title %}Instant Care | Aarogya AI{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 flex flex-col">
+
+    {% if user.user_type == 'doctor' %}
+    <div class="flex-1 flex flex-col max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+        
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Dr. {{ user.name.last }}'s Console</h1>
+                <p class="text-sm text-gray-500">Real-time Patient Dispatch</p>
+            </div>
+
+            <div class="flex items-center gap-3 bg-gray-50 p-2 rounded-xl border border-gray-200">
+                <span id="current-status-text" class="text-sm font-bold uppercase px-3 py-1 rounded bg-gray-200 text-gray-600">
+                    {{ user.availability_status or 'OFFLINE' }}
+                </span>
+                
+                <div class="h-6 w-px bg-gray-300 mx-2"></div>
+
+                <button onclick="setDoctorStatus('available')" class="status-btn px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition">
+                    GO ONLINE
+                </button>
+                <button onclick="setDoctorStatus('busy')" class="status-btn px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg shadow-sm transition">
+                    BUSY
+                </button>
+                <button onclick="setDoctorStatus('offline')" class="status-btn px-4 py-2 text-sm font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg shadow-sm transition">
+                    GO OFFLINE
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-white rounded-2xl shadow-lg border-2 border-dashed border-gray-200 flex flex-col justify-center items-center relative overflow-hidden">
+            
+            <div id="doctor-idle-state" class="text-center z-10 transition-opacity duration-300">
+                <div class="mx-auto h-24 w-24 bg-indigo-50 rounded-full flex items-center justify-center mb-4 animate-pulse">
+                    <svg class="h-10 w-10 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.618 8-8 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 3.618-8 8-8s8 3.582 8 8z"></path></svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800">Waiting for requests...</h2>
+                <p class="text-gray-500 mt-2">Make sure your status is <span class="text-green-600 font-bold">ONLINE</span> to receive patients.</p>
+                {% if not user.is_public %}
+                <p class="text-red-500 text-sm mt-4 bg-red-50 p-2 rounded border border-red-100 font-bold">
+                    ⚠️ Your profile is PRIVATE. You cannot go Online.
+                </p>
+                {% endif %}
+            </div>
+
+            <div id="incoming-request-card" class="hidden absolute inset-0 bg-white z-20 flex flex-col justify-center items-center p-8 animate-in slide-in-from-bottom duration-500">
+                <div class="w-full max-w-lg bg-white border-2 border-indigo-600 rounded-3xl shadow-2xl p-8 text-center relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-2 bg-indigo-600 animate-[loading_60s_linear_forwards]"></div>
+                    
+                    <span class="inline-block px-3 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold uppercase mb-4 tracking-wider">High Priority Match</span>
+                    
+                    <h2 class="text-3xl font-bold text-gray-900 mb-2">Incoming Patient</h2>
+                    <div class="py-6 space-y-2">
+                        <p class="text-xl font-medium text-gray-800" id="req-patient-name">Loading...</p>
+                        <p class="text-gray-500 text-sm">Symptoms:</p>
+                        <p class="text-lg text-indigo-700 font-semibold italic" id="req-symptoms">"Severe chest pain..."</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mt-4">
+                        <button class="py-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition">PASS</button>
+                        <button class="py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg transform hover:scale-105 transition">ACCEPT NOW</button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-4">Auto-rejecting in <span id="timer-count">60</span>s</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    {% elif user.user_type == 'patient' %}
+    <div class="flex-1 flex flex-col justify-center items-center p-4">
+        <div class="max-w-2xl w-full bg-white rounded-3xl shadow-xl overflow-hidden">
+            
+            <div class="bg-indigo-600 p-8 text-white text-center">
+                <h1 class="text-3xl font-bold">Instant Care</h1>
+                <p class="opacity-90 mt-2">Connect with a specialist in minutes.</p>
+            </div>
+
+            <div class="flex border-b border-gray-100">
+                <button onclick="showTab('quick')" id="btn-quick" class="flex-1 py-4 text-center font-bold text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50">Quick Match</button>
+                <button onclick="showTab('ai')" id="btn-ai" class="flex-1 py-4 text-center font-bold text-gray-500 hover:text-indigo-600">AI Triage</button>
+            </div>
+
+            <div class="p-8 min-h-[300px]">
+                
+                <div id="tab-quick" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Select Specialist</label>
+                        <select class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-lg">
+                            <option>General Physician</option>
+                            <option>Cardiologist</option>
+                            <option>Pediatrician</option>
+                            <option>Dermatologist</option>
+                        </select>
+                    </div>
+                    <button class="w-full py-4 bg-indigo-600 text-white font-bold text-lg rounded-xl hover:bg-indigo-700 shadow-lg transform hover:scale-[1.02] transition-all">
+                        Find a Doctor
+                    </button>
+                </div>
+
+                <div id="tab-ai" class="hidden space-y-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Describe your symptoms</label>
+                        <textarea placeholder="e.g., I have a severe headache and blurred vision..." rows="3" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-lg"></textarea>
+                    </div>
+                    <button class="w-full py-4 bg-purple-600 text-white font-bold text-lg rounded-xl hover:bg-purple-700 shadow-lg transform hover:scale-[1.02] transition-all flex justify-center items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        Analyze & Connect
+                    </button>
+                </div>
+
+            </div>
+            
+            <div class="bg-gray-50 p-4 text-center text-xs text-gray-500 border-t">
+                Only for non-emergency consultations. Call 108 for emergencies.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+    <script>
+    const userType = "{{ user.user_type }}"; 
+    const currentUserId = "{{ user.id }}";
+    let activeRequestId = null;
+    let pollInterval = null;
+
+    // ==========================================
+    //  DOCTOR LOGIC (Dispatch Console)
+    // ==========================================
+    if (userType === 'doctor') {
+        
+        // 1. Status Toggles
+        function setDoctorStatus(status) {
+            const badge = document.getElementById('current-status-text');
+            
+            fetch('/doctor/set-availability', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({status: status})
+            })
+            .then(async res => {
+                const data = await res.json();
+                if(!res.ok) throw new Error(data.detail || 'Error');
+                
+                badge.innerText = status.toUpperCase();
+                badge.className = 'text-sm font-bold uppercase px-3 py-1 rounded transition-colors duration-300 ';
+                
+                if(status === 'available') {
+                    badge.classList.add('bg-green-100', 'text-green-700');
+                    startDoctorPolling(); // Start listening for requests
+                } else {
+                    if(status === 'busy') badge.classList.add('bg-red-100', 'text-red-700');
+                    else badge.classList.add('bg-gray-200', 'text-gray-600');
+                    stopPolling(); // Stop listening
+                }
+
+                Swal.fire({
+                    toast: true, position: 'top-end', icon: 'success', 
+                    title: `Status: ${status.toUpperCase()}`, showConfirmButton: false, timer: 1500
+                });
+            })
+            .catch(err => Swal.fire('Error', err.message, 'error'));
+        }
+
+        // 2. Poll for Incoming Requests (Every 3 seconds)
+        function startDoctorPolling() {
+            if(pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/instant/incoming');
+                    const data = await res.json();
+                    
+                    if (data.has_request) {
+                        showIncomingRequest(data);
+                        stopPolling(); // Pause polling while handling this
+                    }
+                } catch (e) { console.error("Polling error", e); }
+            }, 3000);
+        }
+
+        function stopPolling() {
+            if(pollInterval) clearInterval(pollInterval);
+        }
+
+        // 3. Show "Incoming" Modal
+        function showIncomingRequest(data) {
+            const card = document.getElementById('incoming-request-card');
+            const idle = document.getElementById('doctor-idle-state');
+            
+            document.getElementById('req-patient-name').innerText = data.patient_name;
+            document.getElementById('req-symptoms').innerText = `"${data.symptoms}"`;
+            
+            // Show Card / Hide Idle
+            card.classList.remove('hidden');
+            idle.classList.add('hidden');
+            
+            // Bind Buttons
+            card.querySelector('.bg-green-600').onclick = () => acceptRequest(data.request_id);
+            card.querySelector('.bg-gray-100').onclick = () => rejectRequest(data.request_id);
+        }
+
+        async function acceptRequest(reqId) {
+            try {
+                const res = await fetch(`/instant/accept/${reqId}`, {method: 'POST'});
+                const data = await res.json();
+                if(res.ok) {
+                    Swal.fire('Connected!', 'Redirecting to Google Meet...', 'success');
+                    setTimeout(() => window.location.href = data.meet_link, 1500);
+                }
+            } catch(e) { Swal.fire('Error', 'Could not accept connection', 'error'); }
+        }
+
+        async function rejectRequest(reqId) {
+            await fetch(`/instant/reject/${reqId}`, {method: 'POST'});
+            // Reset UI
+            document.getElementById('incoming-request-card').classList.add('hidden');
+            document.getElementById('doctor-idle-state').classList.remove('hidden');
+            startDoctorPolling(); // Restart listener
+        }
+
+        // Auto-start polling if already available on load
+        if ("{{ user.availability_status }}" === "available") {
+            startDoctorPolling();
+        }
+    }
+
+
+    // ==========================================
+    //  PATIENT LOGIC (Request Hub)
+    // ==========================================
+    if (userType === 'patient') {
+
+        // 1. Send Request (Blind Match)
+        async function sendRequest(type) {
+            let payload = {};
+            
+            if (type === 'specialty') {
+                const spec = document.querySelector('select').value;
+                payload = { type: 'specialty', value: spec };
+            } else {
+                const sym = document.querySelector('textarea').value;
+                if(!sym) return Swal.fire('Required', 'Please describe your symptoms', 'warning');
+                payload = { type: 'symptoms', value: sym };
+            }
+
+            // Show Loading Animation
+            Swal.fire({
+                title: 'Searching Network...',
+                html: 'Finding the best available doctor for you.<br><b>Please wait...</b>',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            try {
+                const res = await fetch('/instant/request', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await res.json();
+                
+                if (!res.ok) throw new Error(data.detail);
+
+                // Success! Start Waiting Logic
+                activeRequestId = data.request_id;
+                startPatientPolling();
+                
+                Swal.update({
+                    icon: 'info',
+                    title: 'Request Sent',
+                    html: `Waiting for <b>${data.doctor_name}</b> to accept...<br><span class="text-xs text-gray-500">(Typically takes 30-60s)</span>`,
+                    showConfirmButton: false
+                });
+
+            } catch (err) {
+                Swal.fire('Unavailable', err.message, 'error');
+            }
+        }
+
+        // 2. Poll for Acceptance
+        function startPatientPolling() {
+            let checks = 0;
+            const maxChecks = 20; // 60 seconds approx (20 * 3s)
+
+            pollInterval = setInterval(async () => {
+                checks++;
+                if (checks > maxChecks) {
+                    clearInterval(pollInterval);
+                    Swal.fire('Timeout', 'The doctor did not respond in time. Please try again.', 'error');
+                    return;
+                }
+
+                const res = await fetch(`/instant/status/${activeRequestId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    if (data.status === 'accepted') {
+                        clearInterval(pollInterval);
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Doctor Accepted!',
+                            text: 'Joining video call...',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                        setTimeout(() => window.location.href = data.meet_link, 2000);
+                    } 
+                    else if (data.status === 'rejected') {
+                        clearInterval(pollInterval);
+                        Swal.fire('Declined', 'The doctor is currently busy. Please try another specialist.', 'warning');
+                    }
+                }
+            }, 3000);
+        }
+
+        // Bind Buttons
+        const btnQuick = document.querySelector('#tab-quick button');
+        if(btnQuick) btnQuick.onclick = () => sendRequest('specialty');
+
+        const btnAi = document.querySelector('#tab-ai button');
+        if(btnAi) btnAi.onclick = () => sendRequest('symptoms');
+    }
+
+    // UI Helper for Tabs
+    function showTab(tab) {
+        document.getElementById('tab-quick').classList.add('hidden');
+        document.getElementById('tab-ai').classList.add('hidden');
+        // Reset Styles...
+        document.querySelectorAll('[id^="btn-"]').forEach(b => {
+            b.classList.replace('text-indigo-600', 'text-gray-500');
+            b.classList.replace('bg-indigo-50', 'bg-transparent');
+            b.classList.remove('border-b-2');
+        });
+
+        document.getElementById('tab-' + tab).classList.remove('hidden');
+        const activeBtn = document.getElementById('btn-' + tab);
+        activeBtn.classList.replace('text-gray-500', 'text-indigo-600');
+        activeBtn.classList.replace('bg-transparent', 'bg-indigo-50');
+        activeBtn.classList.add('border-b-2');
+    }
+</script>
+</script>
+
+<style>
+    /* Loading Bar Animation for Request Card */
+    @keyframes loading {
+        0% { width: 100%; }
+        100% { width: 0%; }
+    }
+</style>
+{% endblock %}

@@ -145,6 +145,7 @@ class User(BaseModel):
     doctor_list: List[str] = [] 
     is_public: bool = False
     is_authorized: bool = False
+    availability_status: str = "offline"
     
     # Patient Detail Fields
     name: Optional[Name] = None

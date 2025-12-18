@@ -9,6 +9,7 @@ from datetime import datetime
 import asyncio
 from typing import Dict, Any, Optional
 
+
 load_dotenv()
 logger = logging.getLogger(__name__)
 
@@ -256,3 +257,29 @@ USER QUESTION: {query}
         except Exception as e:
             logger.error(f"Error predicting severity: {e}")
             return "Normal"
+        
+    async def predict_specialty_from_symptoms(symptoms_text: str) -> str:
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel("gemini-pro")
+
+        prompt = f"""
+        Act as a medical triage AI. Analyze the following symptoms and map them to the SINGLE most appropriate medical specialization.
+        
+        Symptoms: "{symptoms_text}"
+        
+        Rules:
+        1. Return ONLY the name of the specialization (e.g., 'Cardiologist', 'Dermatologist', 'General Physician').
+        2. Do not add any explanation or extra text.
+        3. If unclear or general, default to 'General Physician'.
+        
+        Output:
+        """
+        
+        try:
+            response = await model.generate_content_async(prompt)
+            specialty = response.text.strip()
+            # Clean up any potential extra punctuation
+            return specialty.replace(".", "")
+        except Exception as e:
+            print(f"AI Error: {e}")
+            return "General Physician" # Fallback

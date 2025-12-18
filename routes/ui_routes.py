@@ -185,3 +185,21 @@ async def doctor_view_patient_page(
     }
     return templates.TemplateResponse("doctor_patient_records.html", context)
 
+@router.get("/instant-care", response_class=HTMLResponse)
+async def instant_care_page(
+    current_user: User = Depends(get_current_authenticated_user),
+    base_context: Dict[str, Any] = Depends(get_base_template_context)
+):
+    """Renders the Instant Care Console (Doctor & Patient views)."""
+    
+    # Optional: Fetch list of specializations for the dropdown if needed later
+    # specializations = await get_all_specializations() 
+    
+    context = {
+        "title": "Instant Care Center",
+        "user": current_user,
+        "user_json": current_user.model_dump_json(by_alias=True),
+        **base_context
+    }
+    return templates.TemplateResponse("instant_care.html", context)
+

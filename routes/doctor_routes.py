@@ -349,6 +349,44 @@ async def save_parsed_report_data(
 
     return JSONResponse({"message": "Saved and parsed successfully", "extracted_data": extracted_data})
 
+@router.post("/set-availability", tags=["Doctor"])
+async def set_doctor_availability(
+    status: str = Body(..., embed=True), 
+    current_user: User = Depends(get_current_doctor)
+):
+    """
+    Updates doctor's availability status.
+    Uses a FRESH database check to ensure the 'Public' status is accurate.
+    """
+    valid_statuses = ["available", "busy", "cooldown", "offline"]
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail="Invalid status provided.")
+
+    # --- 1. ROBUST CHECK: Fetch latest status directly from DB ---
+    # We do not trust 'current_user' here because it might be outdated (stale session).
+    fresh_user_data = await user_collection.find_one({"email": current_user.email})
+    
+    if not fresh_user_data:
+        raise HTTPException(status_code=404, detail="User record not found.")
+
+    # Get the real-time 'is_public' value
+    is_public_live = fresh_user_data.get("is_public", False)
+
+    # --- 2. VALIDATION RULE ---
+    if status == "available" and not is_public_live:
+        raise HTTPException(
+            status_code=400, 
+            detail="Your profile is currently PRIVATE. Please switch to PUBLIC using the toggle in the top menu."
+        )
+
+    # --- 3. UPDATE STATUS ---
+    await user_collection.update_one(
+        {"email": current_user.email},
+        {"$set": {"availability_status": status}}
+    )
+    
+    return {"message": f"Status updated to {status}", "current_status": status}
+
 @router.post("/patient/{patient_id}/generate-report-text",tags=["Doctor"])
 async def generate_medical_report_text_endpoint(
     patient_id: str,

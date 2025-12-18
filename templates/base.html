@@ -77,6 +77,12 @@
                 <a href="/user/profile" class="nav-link">My Profile</a>
                 <a href="/reports" class="nav-link">My Reports</a>
                 <a href="/appointments" class="nav-link">Appointments</a>
+                <a href="/instant-care" class="border-transparent text-gray-500 hover:border-indigo-500 hover:text-indigo-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                    <svg class="w-5 h-5 mr-1 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    Instant Care
+                </a>
                 <a href="/ai/consultation" class="nav-link text-indigo-600 font-semibold">AI Assistant</a>
                 <a href="/patient/wellness" class="mobile-link text-green-600 font-semibold">Wellness Plan</a>
               {% elif user.user_type == 'doctor' %}
@@ -84,6 +90,12 @@
                 <a href="/user/profile" class="nav-link">My Profile</a>
                 <a href="/appointments" class="nav-link">Appointments</a>
                 <a href="/ai/consultation" class="nav-link text-indigo-600 font-semibold">AI Assistant</a>
+                <a href="/instant-care" class="border-transparent text-gray-500 hover:border-indigo-500 hover:text-indigo-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                  <svg class="w-5 h-5 mr-1 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                  </svg>
+                  Instant care 
+              </a>
               {% endif %}
             {% endif %}
           </div>
@@ -137,6 +149,7 @@
               <a href="/user/profile" class="nav-link">My Profile</a>
               <a href="/reports" class="mobile-link">My Reports</a>
               <a href="/appointments" class="mobile-link">Appointments</a>
+              <a href="/instant-care" class="mobile-link">Instant Care</a>
               <a href="/patient/wellness" class="mobile-link text-green-600 font-semibold">Wellness Plan</a>
               <a href="/ai/consultation" class="nav-link text-indigo-600 font-semibold">AI Assistant</a>
             {% elif user.user_type == 'doctor' %}
@@ -144,6 +157,7 @@
               <a href="/user/profile" class="nav-link">My Profile</a>
               <a href="/appointments" class="mobile-link">Appointments</a>
               <a href="/ai/consultation" class="nav-link text-indigo-600 font-semibold">AI Assistant</a>
+              <a href="/instant-care" class="mobile-link">Instant care</a>
             {% endif %}
             <button id="mobileLogout" class="mobile-link text-left">Logout</button>
           {% else %}
@@ -209,82 +223,106 @@
 
   <script src="{{ url_for('static', path='js/main.js') }}"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // Only run this logic if the toggle actually exists (i.e., user is a doctor)
-        const toggle = document.getElementById('mode-toggle');
-        const statusText = document.getElementById('toggle-status-text');
+      document.addEventListener('DOMContentLoaded', () => {
+          const toggle = document.getElementById('mode-toggle');
+          const statusText = document.getElementById('toggle-status-text');
 
-        if (toggle && statusText) {
-            
-            // 1. Check if user already has a preferred status (optional initialization)
-            // if (window.APP.currentUser.is_public) { toggle.click(); } 
+          // Only run if the toggle exists (i.e., user is a Doctor)
+          if (toggle && statusText && window.APP.currentUser) {
+              
+              // --- 1. INITIALIZATION: Set toggle based on backend data ---
+              // If the user is public in the DB, switch the toggle ON visually
+              if (window.APP.currentUser.is_public === true) {
+                  toggle.checked = true;
+                  statusText.textContent = "Public";
+              } else {
+                  toggle.checked = false;
+                  statusText.textContent = "Private";
+              }
 
-            toggle.addEventListener('change', function() {
-                if (toggle.checked) {
-                    // Switch to PUBLIC
-                    statusText.textContent = "Public";
-                    // Trigger backend update
-                    console.log("Switched to Public");
-                    // fetch('/doctor/status/update', { method: 'POST', body: JSON.stringify({status: 'public'}) });
-                } else {
-                    // Switch to PRIVATE
-                    statusText.textContent = "Private";
-                    // Trigger backend update
-                    console.log("Switched to Private");
-                    // fetch('/doctor/status/update', { method: 'POST', body: JSON.stringify({status: 'private'}) });
-                }
-            });
-        }
-    });
-    document.getElementById('sosBtn').addEventListener('click', function() {
-    Swal.fire({
-        title: 'EMERGENCY?',
-        text: "This will dial 108 and alert your doctor immediately.",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc2626', // Red
-        cancelButtonColor: '#6b7280', // Grey
-        confirmButtonText: 'YES, CALL 108',
-        cancelButtonText: 'Cancel',
-        focusConfirm: false, // Prevent accidental enter key
-        background: '#fff',
-        backdrop: `rgba(220, 38, 38, 0.4)` // Reddish tint background
-    }).then((result) => {
-        if (result.isConfirmed) {
-            triggerEmergencyProtocol();
-        }
-    });
-});
+              // --- 2. EVENT LISTENER: Handle clicks ---
+              toggle.addEventListener('change', function() {
+                  const isPublic = toggle.checked;
+                  
+                  // Optimistic UI Update
+                  statusText.textContent = isPublic ? "Public" : "Private";
 
-function triggerEmergencyProtocol() {
-    // 1. Open the Dialer (Immediate user action)
-    window.location.href = "tel:108";
+                  // Send to Backend
+                  fetch('/doctor/toggle_public', { 
+                      method: 'POST', 
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ is_public: isPublic }) 
+                  })
+                  .then(async res => {
+                      const data = await res.json();
+                      if (res.ok) {
+                          // Optional: Show small success toast
+                          const toast = Swal.mixin({
+                              toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
+                          });
+                          toast.fire({ 
+                              icon: 'success', 
+                              title: isPublic ? 'You are now Visible' : 'You are now Hidden' 
+                          });
+                      } else {
+                          // Revert on failure
+                          console.error("Update failed:", data.detail);
+                          toggle.checked = !isPublic;
+                          statusText.textContent = !isPublic ? "Public" : "Private";
+                          Swal.fire("Error", data.detail || "Could not update status", "error");
+                      }
+                  })
+                  .catch(err => {
+                      console.error("Network error:", err);
+                      // Revert on network error
+                      toggle.checked = !isPublic;
+                      statusText.textContent = !isPublic ? "Public" : "Private";
+                  });
+              });
+          }
+      });
 
-    // 2. Alert the Doctor (Background process)
-    // We send this request silently while the user is calling
-    fetch('/patient/emergency/alert', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            // 'X-CSRFToken': '{{ csrf_token }}' // Uncomment if using Django/CSRF
-        },
-        body: JSON.stringify({
-            timestamp: new Date().toISOString(),
-            location: 'Fetching...', // You can add Geolocation API here later
-            type: 'SOS_BUTTON'
-        })
-    })
-    .then(response => {
-        console.log("Doctor alert sent.");
-        // Optional: Show a small toast notification that help is notified
-        const toast = document.createElement('div');
-        toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-xl z-[60] font-bold';
-        toast.innerText = 'Doctor Notified!';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-    })
-    .catch(error => console.error("Error alerting doctor:", error));
-}
+      // Keep the Emergency Button Logic below
+      const sosBtn = document.getElementById('sosBtn');
+      if (sosBtn) {
+          sosBtn.addEventListener('click', function() {
+              Swal.fire({
+                  title: 'EMERGENCY?',
+                  text: "This will dial 108 and alert your doctor immediately.",
+                  icon: 'warning',
+                  showCancelButton: true,
+                  confirmButtonColor: '#dc2626',
+                  cancelButtonColor: '#6b7280',
+                  confirmButtonText: 'YES, CALL 108',
+                  cancelButtonText: 'Cancel',
+                  focusConfirm: false,
+                  background: '#fff',
+                  backdrop: `rgba(220, 38, 38, 0.4)`
+              }).then((result) => {
+                  if (result.isConfirmed) {
+                      triggerEmergencyProtocol();
+                  }
+              });
+          });
+      }
+
+      function triggerEmergencyProtocol() {
+          window.location.href = "tel:108";
+          fetch('/patient/emergency/alert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  timestamp: new Date().toISOString(),
+                  type: 'SOS_BUTTON'
+              })
+          }).then(() => {
+              const toast = document.createElement('div');
+              toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-xl z-[60] font-bold';
+              toast.innerText = 'Doctor Notified!';
+              document.body.appendChild(toast);
+              setTimeout(() => toast.remove(), 3000);
+          }).catch(console.error);
+      }
   </script>
 </body>
 </html>
