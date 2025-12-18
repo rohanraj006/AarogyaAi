@@ -1,13 +1,12 @@
-# models/schemas.py (OVERHAUL)
+# models/schemas.py
 
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Any
-from datetime import datetime, timedelta, timezone # Added timedelta, timezone
-from bson import ObjectId # Added ObjectId
+from datetime import datetime, timedelta, timezone 
+from bson import ObjectId
 import secrets
-# NOTE: User/Patient specific fields are consolidated into the main User schema.
 
-# --- 1. Session Management Schemas (From Step 1) ---
+# --- 1. Session Management Schemas ---
 SESSION_COOKIE_NAME = "session_token"
 SESSION_EXPIRATION_MINUTES = 1440 
 
@@ -20,19 +19,14 @@ class UserSession(BaseModel):
     last_active: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(minutes=SESSION_EXPIRATION_MINUTES))
 
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {ObjectId: str}
-        arbitrary_types_allowed = True
-# --- End Session Management ---
+    # V2 Configuration
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True
+    }
 
-class Address(BaseModel):
-    street: str
-    city: str
-    state: str
-    zip: str   # Note: This is 'zip', not 'zip_code'
-    country: str
-# --- 2. Detailed Core Models (NEW from Codebase 2) ---
+# --- 2. Detailed Core Models ---
+
 class Name(BaseModel):
     first: str
     middle: Optional[str] = None
@@ -52,17 +46,23 @@ class EmergencyContact(BaseModel):
 
 class Medication(BaseModel):
     name: str
-    dosage: str
-    frequency: str
+    dosage: Optional[str] = None
+    # FIX: Made frequency optional to handle null values from DB
+    frequency: Optional[str] = None 
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     notes: Optional[str] = None
 
 class Diagnosis(BaseModel):
-    disease: str
+    # FIX: Added alias to map 'disease_name' from DB to 'disease'
+    disease: str = Field(alias="disease_name") 
     year: Optional[int] = None
     diagnosis_date: Optional[datetime] = None
     notes: Optional[str] = None
+
+    model_config = {
+        "populate_by_name": True
+    }
 
 class Prescription(BaseModel):
     doctor_id: str 
@@ -92,18 +92,27 @@ class ReportContent(BaseModel):
     content: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+# FIX: Created EmbeddedReport for reports inside MedicalRecord
+class EmbeddedReport(BaseModel):
+    """Schema for reports embedded inside the MedicalRecord document."""
+    report_id: Optional[str] = None
+    report_type: Optional[str] = None
+    date: Optional[datetime] = None
+    content_id: Optional[str] = None
+    description: Optional[str] = None 
+
+# This is the full Report model for the 'reports' collection (File uploads)
 class Report(BaseModel):
-    # This replaces Codebase 1's old Report schema but is adapted to hold references
     id: Optional[str] = Field(alias="_id", default=None)
     filename: str
     upload_date: datetime = Field(default_factory=datetime.utcnow)
     owner_email: str
-    content_id: Optional[str] = None # String ObjectId of the actual content document
+    content_id: Optional[str] = None 
     report_type: Optional[str] = None
     description: Optional[str] = None 
 
     model_config = {
-        'populate_by_name': True
+        "populate_by_name": True
     }
 
 class MedicalRecord(BaseModel):
@@ -113,14 +122,20 @@ class MedicalRecord(BaseModel):
     diagnoses: List[Diagnosis] = []
     prescriptions: List[Prescription] = []
     consultation_history: List[Consultation] = []
-    reports: List[Report] = []
+    
+    # FIX: Use EmbeddedReport here instead of the full Report schema
+    reports: List[EmbeddedReport] = [] 
+    
     allergies: List[str] = []
     immunizations: List[Immunization] = []
     family_medical_history: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+    model_config = {
+        "populate_by_name": True
+    }
+
 class User(BaseModel):
-    
     id: Optional[str] = Field(alias="_id", default=None)
     email: str
     hashed_password: str
@@ -131,7 +146,7 @@ class User(BaseModel):
     is_public: bool = False
     is_authorized: bool = False
     
-    # Patient Detail Fields (Optional since doctors/admins won't have them)
+    # Patient Detail Fields
     name: Optional[Name] = None
     phone_number: Optional[str] = None
     age: Optional[int] = None
@@ -142,24 +157,23 @@ class User(BaseModel):
     date_of_birth: Optional[str] = None 
     specialization: Optional[str] = None
     blood_group:Optional[str] = None
-    emergrncy_contact:Optional[str] = None
-
+    
+    # These fields are strings in the User document (summary)
     medical_conditions: Optional[str] = None 
     allergies: Optional[str] = None           
     current_medications: Optional[str] = None 
     
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {ObjectId: str}
+    model_config = {
+        "populate_by_name": True
+    }
 
 class UserCreate(BaseModel):
     email: str
     password: str
 
 class ChatRequest(BaseModel):
-    # Updated to support advanced actions
     query: Optional[str] = Field(None)
-    action: str = Field('ask', description="Action to perform: 'ask' or 'summarize'. Defaults to 'ask'.")
+    action: str = Field('ask', description="Action: 'ask' or 'summarize'")
     
 class ChatMessageBase(BaseModel):
     user_query: str
@@ -171,14 +185,14 @@ class ChatMessage(ChatMessageBase):
     owner_email: str
 
 class ConnectionRequestModel(BaseModel):
-    # Renamed from ConnectionRequest to avoid conflict with Report
     id: Optional[str] = Field(alias="_id", default=None)
     doctor_email: str
     patient_email: str
     status: Literal["pending","accepted", "rejected"] = "pending"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    
     model_config = {
-        'populate_by_name': True
+        "populate_by_name": True
     }
 
 class DoctorInfo(BaseModel):
@@ -188,7 +202,6 @@ class DoctorInfo(BaseModel):
     is_authorized: bool
 
 class AppointmentRequestModel(BaseModel):
-    # Updated with severity prediction fields
     id: Optional[str] = Field(alias="_id", default=None)
     patient_email: str
     doctor_email: str 
@@ -201,18 +214,17 @@ class AppointmentRequestModel(BaseModel):
     patient_notes: Optional[str] = None
     predicted_severity: Optional[str] = None
 
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {ObjectId: str} 
+    model_config = {
+        "populate_by_name": True
+    } 
 
 class AppointmentConfirmBody(BaseModel):
     request_id: str
     appointment_time: datetime
 
 class DictationSaveBody(BaseModel):
-    # Needs a patient ID/email and the extracted data to save
     patient_email: str
-    medical_record: MedicalRecord # NOTE: This now uses the rich MedicalRecord structure
+    medical_record: MedicalRecord 
 
 class ReportContentRequest(BaseModel):
     content_text: str = Field(..., description="Raw or formatted text content.")

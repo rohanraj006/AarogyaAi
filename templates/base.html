@@ -4,13 +4,21 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>{% block title %}Aarogya AI{% endblock %}</title>
+  <style>
+        /* Paste the Toggle CSS I gave you earlier here */
+        .toggle-wrapper { display: flex; align-items: center; gap: 10px; margin-left: 15px; }
+        .toggle-checkbox { display: none; }
+        .toggle-label { width: 60px; height: 30px; background-color: #3b82f6; border-radius: 50px; position: relative; cursor: pointer; transition: background-color 0.4s; }
+        .toggle-switch { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; background-color: #ffffff; border-radius: 50%; transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .toggle-checkbox:checked + .toggle-label { background-color: #22c55e; }
+        .toggle-checkbox:checked + .toggle-label .toggle-switch { transform: translateX(30px); }
+        .status-text { font-size: 0.9rem; font-weight: 600; color: #3b82f6; min-width: 50px; }
+        .toggle-checkbox:checked ~ .status-text { color: #22c55e; }
+    </style>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  
+  <script src="https://cdn.tailwindcss.com"></script>  
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>  
   <script>
     tailwind.config = {
       theme: {
@@ -83,6 +91,15 @@
 
 
         <div class="flex items-center gap-3">
+          {% if user and user.user_type == 'doctor' %}
+              <div class="toggle-wrapper border-l pl-3 ml-1 border-gray-300"> <input type="checkbox" id="mode-toggle" class="toggle-checkbox">
+                  <label for="mode-toggle" class="toggle-label" title="Switch between Public/Private availability">
+                      <span class="toggle-inner"></span>
+                      <span class="toggle-switch"></span>
+                  </label>
+                  <span id="toggle-status-text" class="status-text">Private</span>
+              </div>
+          {% endif %}
           {% if user %}
             <div class="hidden md:flex items-center gap-3">
               <a href="/user/profile" class="text-sm text-slate-600 hover:text-indigo-600 transition-colors flex items-center gap-2 group">
@@ -161,6 +178,22 @@
       </div>
     </div>
   </div>
+  <div class="fixed left-6 bottom-6 z-50">
+    <span class="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping"></span>
+    
+    <button id="sosBtn" 
+            class="relative flex items-center justify-center w-16 h-16 bg-red-600 rounded-full shadow-lg border-4 border-red-100 hover:scale-110 transition-transform duration-200 group"
+            title="Emergency SOS">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        
+        <span class="absolute -top-10 left-1/2 -translate-x-1/2 bg-red-800 text-white text-xs font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            Emergency
+        </span>
+    </button>
+</div>
 
   <footer class="mt-12 py-8">
     <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 text-sm text-slate-500">
@@ -175,5 +208,83 @@
   <div id="toastContainer" class="fixed left-1/2 -translate-x-1/2 top-6 z-50"></div>
 
   <script src="{{ url_for('static', path='js/main.js') }}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Only run this logic if the toggle actually exists (i.e., user is a doctor)
+        const toggle = document.getElementById('mode-toggle');
+        const statusText = document.getElementById('toggle-status-text');
+
+        if (toggle && statusText) {
+            
+            // 1. Check if user already has a preferred status (optional initialization)
+            // if (window.APP.currentUser.is_public) { toggle.click(); } 
+
+            toggle.addEventListener('change', function() {
+                if (toggle.checked) {
+                    // Switch to PUBLIC
+                    statusText.textContent = "Public";
+                    // Trigger backend update
+                    console.log("Switched to Public");
+                    // fetch('/doctor/status/update', { method: 'POST', body: JSON.stringify({status: 'public'}) });
+                } else {
+                    // Switch to PRIVATE
+                    statusText.textContent = "Private";
+                    // Trigger backend update
+                    console.log("Switched to Private");
+                    // fetch('/doctor/status/update', { method: 'POST', body: JSON.stringify({status: 'private'}) });
+                }
+            });
+        }
+    });
+    document.getElementById('sosBtn').addEventListener('click', function() {
+    Swal.fire({
+        title: 'EMERGENCY?',
+        text: "This will dial 108 and alert your doctor immediately.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626', // Red
+        cancelButtonColor: '#6b7280', // Grey
+        confirmButtonText: 'YES, CALL 108',
+        cancelButtonText: 'Cancel',
+        focusConfirm: false, // Prevent accidental enter key
+        background: '#fff',
+        backdrop: `rgba(220, 38, 38, 0.4)` // Reddish tint background
+    }).then((result) => {
+        if (result.isConfirmed) {
+            triggerEmergencyProtocol();
+        }
+    });
+});
+
+function triggerEmergencyProtocol() {
+    // 1. Open the Dialer (Immediate user action)
+    window.location.href = "tel:108";
+
+    // 2. Alert the Doctor (Background process)
+    // We send this request silently while the user is calling
+    fetch('/patient/emergency/alert', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            // 'X-CSRFToken': '{{ csrf_token }}' // Uncomment if using Django/CSRF
+        },
+        body: JSON.stringify({
+            timestamp: new Date().toISOString(),
+            location: 'Fetching...', // You can add Geolocation API here later
+            type: 'SOS_BUTTON'
+        })
+    })
+    .then(response => {
+        console.log("Doctor alert sent.");
+        // Optional: Show a small toast notification that help is notified
+        const toast = document.createElement('div');
+        toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-xl z-[60] font-bold';
+        toast.innerText = 'Doctor Notified!';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    })
+    .catch(error => console.error("Error alerting doctor:", error));
+}
+  </script>
 </body>
 </html>

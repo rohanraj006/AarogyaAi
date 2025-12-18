@@ -14,7 +14,6 @@ if not MONGO_URI:
 client = AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=5000)
 
 db = client.aarogyadb 
-
 user_collection = db.users
 sessions_collection = db.sessions 
 chat_messages_collection = db.chat_messages

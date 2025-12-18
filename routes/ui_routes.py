@@ -37,7 +37,10 @@ async def home_page(
         # Assuming other users are patients
         return RedirectResponse("/profile", status_code=status.HTTP_303_SEE_OTHER)
         
-    context = {"title": "Aarogya AI - Home", **base_context}
+    context = {
+        "title": "Aarogya AI - Home",
+        **base_context
+        }
     return templates.TemplateResponse("home.html", context)
 
 @router.get("/users/login", response_class=HTMLResponse)

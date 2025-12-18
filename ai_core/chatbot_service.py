@@ -149,12 +149,14 @@ USER QUESTION: {query}
         
         patient_context = self._format_patient_data(patient_data.get('user_doc', {}))
         doctor_context = self._format_doctor_data(doctor_data)
+        current_date_str = datetime.now().strftime("%B %d, %Y")
 
         prompt = f"""
         You are a medical scribe. Format the following dictated notes into a professional medical report.
         Use standard sections: Subjective, Objective, Assessment, Plan.
         Do NOT use markdown (like ** or ##). Use simple text formatting with clear headers.
         
+        Date: {current_date_str}
         Doctor: {doctor_context}
         Patient: {patient_context}
         

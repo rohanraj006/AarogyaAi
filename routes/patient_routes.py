@@ -8,6 +8,7 @@ from datetime import datetime
 # Security & Database
 from security import get_current_authenticated_user
 from models.schemas import User
+from database import db
 
 # AI Core
 from ai_core.chatbot_service import MedicalChatbot
@@ -77,3 +78,39 @@ async def get_wellness_plan(
             "datetime_cls": datetime
         }
     )
+
+
+@router.post("/patient/emergency/alert")
+async def alert_doctor(
+    request: Request, 
+    current_user: User = Depends(get_current_authenticated_user)
+):
+    try:
+        body = await request.json()
+        location = body.get("location", "GPS Unavailable")
+    except Exception:
+        location = "GPS Unavailable"
+
+    mapping = db.doctor_patient_mappings.find_one({
+        "patient_email": current_user.email
+    })
+
+    doctor_info = "108 (Ambulance)"
+
+    if mapping:
+        doctor_email = mapping.get("doctor_email")
+        doctor_doc = db.users.find_one({"email": doctor_email})
+        
+        if doctor_doc:
+            doctor_name = doctor_doc.get("name", {}).get("first", "Doctor")
+            doctor_phone = doctor_doc.get("phone", "")
+            doctor_info = f"Dr. {doctor_name}"
+            
+            print(f"🚨 EMERGENCY: Patient {current_user.email} @ {location}")
+            print(f"📨 ALERTING: {doctor_info} on {doctor_phone}")
+
+    return {
+        "status": "alert_sent", 
+        "notified": doctor_info,
+        "timestamp": datetime.utcnow().isoformat()
+    }

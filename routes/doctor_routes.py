@@ -21,15 +21,16 @@ from reportlab.lib.units import inch
 
 # Core Imports
 from security import get_current_authenticated_user
-from database import user_collection, medical_records_collection, report_contents_collection
+# FIX: Added reports_collection to imports so we can save patient-visible reports
+from database import user_collection, medical_records_collection, report_contents_collection, reports_collection
 
-# --- FIXED IMPORTS: Added Prescription and MedicalRecord ---
+# Schemas
 from models.schemas import (
     User, Name, Diagnosis, Medication, ReportPDFRequest, 
-    ReportContentRequest, DictationSaveBody, Prescription, MedicalRecord
+    ReportContentRequest, DictationSaveBody, Prescription, MedicalRecord, Report
 )
 
-# NEW AI IMPORTS
+# AI Imports
 from ai_core.chatbot_service import MedicalChatbot
 from ai_core.parser_service import MedicalReportParser
 from ai_core.helpers import fetch_patient_context
@@ -119,7 +120,6 @@ async def search_for_patient(
     else:
         patient_name = {"first": patient["email"].split('@')[0], "last": ""}
     
-    # Return the internal _id as string for tagging
     return {
         "_id": str(patient["_id"]), 
         "aarogya_id": patient["aarogya_id"],
@@ -205,18 +205,15 @@ async def transcribe_medical_report(
         if tmp_file_path and os.path.exists(tmp_file_path):
             os.remove(tmp_file_path)
 
-# --- NEW: Save Prescription Endpoint ---
+# --- SAVE PRESCRIPTION ---
 @router.post("/patient/{patient_id}/prescribe", tags=["Doctor"])
 async def save_prescription(
     patient_id: str,
-    prescription: Prescription, # Expects structured data
+    prescription: Prescription, 
     current_user: User = Depends(get_current_doctor)
 ):
-    """Saves a new prescription to the patient's record."""
-    # Verify patient connection
-    patient = await user_collection.find_one({"aarogya_id": patient_id}) # Using Aarogya ID for URL param is safer for humans
+    patient = await user_collection.find_one({"aarogya_id": patient_id})
     if not patient:
-        # Try finding by Mongo ID if Aarogya ID failed
         try:
              patient = await user_collection.find_one({"_id": ObjectId(patient_id)})
         except:
@@ -228,10 +225,8 @@ async def save_prescription(
     if patient["email"] not in current_user.patient_list:
         raise HTTPException(status_code=403, detail="Not connected to this patient.")
 
-    # Convert to dict and add timestamps if needed
     presc_dict = prescription.model_dump()
     
-    # Update Medical Record
     await medical_records_collection.update_one(
         {"patient_id": patient["email"]},
         {
@@ -248,8 +243,6 @@ async def get_patient_reports(
     patient_id: str,
     current_user: User = Depends(get_current_doctor)
 ):
-    """Fetches list of reports for a patient, sorted by newest first."""
-    # 1. Find Patient
     patient = await user_collection.find_one({"aarogya_id": patient_id})
     if not patient:
          try: patient = await user_collection.find_one({"_id": ObjectId(patient_id)})
@@ -257,12 +250,10 @@ async def get_patient_reports(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found.")
 
-    # 2. Get Medical Record
     record = await medical_records_collection.find_one({"patient_id": patient["email"]})
     if not record:
         return []
 
-    # 3. Return Reports (Sorted by date desc)
     reports = record.get("reports", [])
     reports.sort(key=lambda x: x.get("upload_date", ""), reverse=True)
     return reports
@@ -272,7 +263,6 @@ async def get_report_content(
     content_id: str,
     current_user: User = Depends(get_current_doctor)
 ):
-    """Fetches the text content of a parsed report."""
     try:
         content = await report_contents_collection.find_one({"_id": ObjectId(content_id)})
         if content:
@@ -281,62 +271,6 @@ async def get_report_content(
             return {"content": "Content not found."}
     except:
         raise HTTPException(status_code=400, detail="Invalid Content ID")
-
-# --- REPORT GENERATION ---
-@router.post("/patient/{patient_id}/generate-report-text", tags=["Doctor"])
-async def generate_medical_report_text_endpoint(
-    patient_id: str,
-    body: Dict[str, str] = Body(...), 
-    current_user: User = Depends(get_current_doctor)
-):
-    transcribed_text = body.get('transcribed_text')
-    if not transcribed_text:
-        raise HTTPException(status_code=400, detail="No transcribed text provided.")
-
-    # Fetch patient using ID (Assuming ID corresponds to aarogya_id based on previous routes)
-    patient = await user_collection.find_one({"aarogya_id": patient_id})
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found.")
-
-    context = await fetch_patient_context(patient['email'])
-    
-    formatted_report_text = await chatbot_service.generate_medical_report(
-        patient_data=context,
-        doctor_data=current_user.model_dump(),
-        transcribed_text=transcribed_text
-    )
-
-    return JSONResponse({"report_text": formatted_report_text})
-
-@router.post("/patient/{patient_id}/generate-report-text", tags=["Doctor"])
-async def generate_medical_report_text_endpoint(
-    patient_id: str,
-    body: Dict[str, str] = Body(...), 
-    current_user: User = Depends(get_current_doctor)
-):
-    transcribed_text = body.get('transcribed_text')
-    if not transcribed_text:
-        raise HTTPException(status_code=400, detail="No transcribed text provided.")
-
-    patient = await user_collection.find_one({"aarogya_id": patient_id})
-    if not patient:
-         # Fallback to search by ObjectId
-         try:
-            patient = await user_collection.find_one({"_id": ObjectId(patient_id)})
-         except: pass
-         
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found.")
-
-    context = await fetch_patient_context(patient['email'])
-    
-    formatted_report_text = await chatbot_service.generate_medical_report(
-        patient_data=context,
-        doctor_data=current_user.model_dump(),
-        transcribed_text=transcribed_text
-    )
-
-    return JSONResponse({"report_text": formatted_report_text})
 
 @router.post("/patient/{patient_id}/save-parsed-report", tags=["Doctor"])
 async def save_parsed_report_data(
@@ -366,14 +300,29 @@ async def save_parsed_report_data(
         doctor_data=current_user.model_dump()
     )
 
-    # 2. Save Report Content
+    # 2. Save Report Content (The actual text)
     content_doc = {"content_text": report_content_text, "created_at": datetime.utcnow()}
     insert_result = await report_contents_collection.insert_one(content_doc)
     content_id = str(insert_result.inserted_id)
 
-    # 3. Update Record
+    # 3. FIX: Create Entry in 'reports' Collection (For Patient View & Download)
+    report_filename = f"Consultation_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    
+    report_entry = Report(
+        filename=report_filename,
+        owner_email=patient['email'],
+        content_id=content_id,
+        report_type="AI Generated Consultation",
+        description="Doctor generated consultation report."
+    )
+    
+    # Save to reports collection (Exclude 'id' so Mongo generates one)
+    await reports_collection.insert_one(report_entry.model_dump(by_alias=True, exclude={"id"}))
+
+    # 4. Update Medical Record (For Doctor View)
+    # Using the simplified structure for embedded reports
     report_ref = {
-        "report_id": content_id,
+        "report_id": content_id, # Using content ID as ref
         "report_type": "AI Generated Consultation Report",
         "date": datetime.utcnow(),
         "content_id": content_id,
@@ -381,6 +330,8 @@ async def save_parsed_report_data(
     }
 
     update_push = {"reports": report_ref}
+    
+    # Push extracted entities (meds, diagnosis, etc.)
     for key in ["diagnoses", "medications", "allergies", "consultations", "immunizations"]:
         if extracted_data.get(key):
             db_key = "current_medications" if key == "medications" else key
@@ -397,3 +348,32 @@ async def save_parsed_report_data(
     )
 
     return JSONResponse({"message": "Saved and parsed successfully", "extracted_data": extracted_data})
+
+@router.post("/patient/{patient_id}/generate-report-text",tags=["Doctor"])
+async def generate_medical_report_text_endpoint(
+    patient_id: str,
+    body: Dict[str, str] = Body(...), 
+    current_user: User = Depends(get_current_doctor)
+):
+    transcribed_text = body.get('transcribed_text')
+    if not transcribed_text:
+        raise HTTPException(status_code=400, detail="No transcribed text provided.")
+
+    patient = await user_collection.find_one({"aarogya_id": patient_id})
+    if not patient:
+         try:
+            patient = await user_collection.find_one({"_id": ObjectId(patient_id)})
+         except: pass
+         
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+
+    context = await fetch_patient_context(patient['email'])
+    
+    formatted_report_text = await chatbot_service.generate_medical_report(
+        patient_data=context,
+        doctor_data=current_user.model_dump(),
+        transcribed_text=transcribed_text
+    )
+
+    return JSONResponse({"report_text": formatted_report_text})
