@@ -126,7 +126,7 @@
 </div>
 
 <script>
-    <script>
+    
     const userType = "{{ user.user_type }}"; 
     const currentUserId = "{{ user.id }}";
     let activeRequestId = null;
@@ -175,7 +175,7 @@
             if(pollInterval) clearInterval(pollInterval);
             pollInterval = setInterval(async () => {
                 try {
-                    const res = await fetch('/instant/incoming');
+                    const res = await fetch('/connections/instant/incoming');
                     const data = await res.json();
                     
                     if (data.has_request) {
@@ -209,7 +209,7 @@
 
         async function acceptRequest(reqId) {
             try {
-                const res = await fetch(`/instant/accept/${reqId}`, {method: 'POST'});
+                const res = await fetch(`/connections/instant/accept/${reqId}`, {method: 'POST'});
                 const data = await res.json();
                 if(res.ok) {
                     Swal.fire('Connected!', 'Redirecting to Google Meet...', 'success');
@@ -260,7 +260,7 @@
             });
 
             try {
-                const res = await fetch('/instant/request', {
+                const res = await fetch('/connections/instant/request', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
@@ -299,7 +299,7 @@
                     return;
                 }
 
-                const res = await fetch(`/instant/status/${activeRequestId}`);
+                const res = await fetch(`/connections/instant/status/${activeRequestId}`);
                 if (res.ok) {
                     const data = await res.json();
                     
@@ -348,7 +348,7 @@
         activeBtn.classList.add('border-b-2');
     }
 </script>
-</script>
+
 
 <style>
     /* Loading Bar Animation for Request Card */
