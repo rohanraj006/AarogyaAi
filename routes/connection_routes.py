@@ -226,8 +226,8 @@ async def request_instant_consultation(
         "user_type": "doctor",
         "availability_status": "available",
         "is_public": True,
-        # We use a regex for flexibility (e.g., "Cardiology" vs "Cardiologist")
-        "specialization": {"$regex": target_specialty, "$options": "i"} 
+        "is_authorized":True,
+        "specialization": {"$regex": target_specialty.split()[0], "$options": "i"} 
     })
 
     if not matched_doctor:

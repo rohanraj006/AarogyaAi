@@ -258,7 +258,7 @@ USER QUESTION: {query}
             logger.error(f"Error predicting severity: {e}")
             return "Normal"
         
-    async def predict_specialty_from_symptoms(symptoms_text: str) -> str:
+    async def predict_specialty_from_symptoms(self, symptoms_text: str) -> str:
         genai.configure(api_key=API_KEY)
         model = genai.GenerativeModel("gemini-pro")
 

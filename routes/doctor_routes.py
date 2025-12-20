@@ -162,6 +162,8 @@ async def doctor_toggle_public_status(
 ):
     if not current_user.is_authorized:
         raise HTTPException(status_code=403, detail="Unauthorized.")
+    
+    if not is_public: await user_collection.update_one({"email": current_user.email}, {"$set": {"availability_status": "offline"}})
 
     await user_collection.update_one(
         {"email": current_user.email},

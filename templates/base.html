@@ -224,63 +224,69 @@
   <script src="{{ url_for('static', path='js/main.js') }}"></script>
   <script>
       document.addEventListener('DOMContentLoaded', () => {
-          const toggle = document.getElementById('mode-toggle');
-          const statusText = document.getElementById('toggle-status-text');
+        const toggle = document.getElementById('mode-toggle');
+        const statusText = document.getElementById('toggle-status-text');
 
-          // Only run if the toggle exists (i.e., user is a Doctor)
-          if (toggle && statusText && window.APP.currentUser) {
-              
-              // --- 1. INITIALIZATION: Set toggle based on backend data ---
-              // If the user is public in the DB, switch the toggle ON visually
-              if (window.APP.currentUser.is_public === true) {
-                  toggle.checked = true;
-                  statusText.textContent = "Public";
-              } else {
-                  toggle.checked = false;
-                  statusText.textContent = "Private";
-              }
+        if (toggle && statusText && window.APP.currentUser) {
+            // --- 1. INITIALIZATION ---
+            if (window.APP.currentUser.is_public === true) {
+                toggle.checked = true;
+                statusText.textContent = "Public";
+            } else {
+                toggle.checked = false;
+                statusText.textContent = "Private";
+            }
 
-              // --- 2. EVENT LISTENER: Handle clicks ---
-              toggle.addEventListener('change', function() {
-                  const isPublic = toggle.checked;
-                  
-                  // Optimistic UI Update
-                  statusText.textContent = isPublic ? "Public" : "Private";
+            // --- 2. EVENT LISTENER ---
+            toggle.addEventListener('change', function() {
+                const isPublic = toggle.checked;
+                statusText.textContent = isPublic ? "Public" : "Private";
 
-                  // Send to Backend
-                  fetch('/doctor/toggle_public', { 
-                      method: 'POST', 
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ is_public: isPublic }) 
-                  })
-                  .then(async res => {
-                      const data = await res.json();
-                      if (res.ok) {
-                          // Optional: Show small success toast
-                          const toast = Swal.mixin({
-                              toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
-                          });
-                          toast.fire({ 
-                              icon: 'success', 
-                              title: isPublic ? 'You are now Visible' : 'You are now Hidden' 
-                          });
-                      } else {
-                          // Revert on failure
-                          console.error("Update failed:", data.detail);
-                          toggle.checked = !isPublic;
-                          statusText.textContent = !isPublic ? "Public" : "Private";
-                          Swal.fire("Error", data.detail || "Could not update status", "error");
-                      }
-                  })
-                  .catch(err => {
-                      console.error("Network error:", err);
-                      // Revert on network error
-                      toggle.checked = !isPublic;
-                      statusText.textContent = !isPublic ? "Public" : "Private";
-                  });
-              });
-          }
-      });
+                fetch('/doctor/toggle_public', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_public: isPublic }) 
+                })
+                .then(async res => {
+                    const data = await res.json();
+                    if (res.ok) {
+                        const toast = Swal.mixin({
+                            toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
+                        });
+                        toast.fire({ 
+                            icon: 'success', 
+                            title: isPublic ? 'You are now Visible' : 'You are now Hidden' 
+                        });
+
+                        // --- UPDATED LOGIC: Sync with Instant Care Console ---
+                        if (!isPublic) {
+                            // Find the status badge in instant_care.html if it's currently open
+                            const consoleStatus = document.getElementById('current-status-text');
+                            if (consoleStatus) {
+                                consoleStatus.innerText = "OFFLINE";
+                                // Apply the offline gray styling used in instant_care.html
+                                consoleStatus.className = 'text-sm font-bold uppercase px-3 py-1 rounded transition-colors duration-300 bg-gray-200 text-gray-600';
+                            }
+
+                            // Stop the polling loop if the function exists on this page
+                            if (typeof stopPolling === 'function') {
+                                stopPolling();
+                            }
+                        }
+                    } else {
+                        // Revert on failure
+                        toggle.checked = !isPublic;
+                        statusText.textContent = !isPublic ? "Public" : "Private";
+                        Swal.fire("Error", data.detail || "Could not update status", "error");
+                    }
+                })
+                .catch(err => {
+                    toggle.checked = !isPublic;
+                    statusText.textContent = !isPublic ? "Public" : "Private";
+                });
+            });
+        }
+    });
 
       // Keep the Emergency Button Logic below
       const sosBtn = document.getElementById('sosBtn');
