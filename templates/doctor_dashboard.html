@@ -91,4 +91,50 @@
     </div>
   </div>
 </div>
+<div id="emergencyToast" class="fixed bottom-5 right-5 z-[100] hidden">
+    <div class="bg-red-600 text-white p-6 rounded-lg shadow-2xl border-2 border-white max-w-sm animate-bounce">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-xl">🚨 EMERGENCY SOS</h3>
+            <button onclick="closeEmergencyToast()" class="text-white hover:text-gray-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <p id="emergencyPatientName" class="mb-4 text-lg font-medium"></p>
+        <a id="emergencyMeetLink" href="#" target="_blank" 
+           class="block w-full text-center bg-white text-red-600 font-bold py-2 rounded hover:bg-gray-100 transition-colors">
+            JOIN CALL NOW
+        </a>
+    </div>
+</div>
+
 {% endblock %}
+<script>
+    function pollEmergencies() {
+        // Reusing the existing instant care polling logic but filtering for emergencies
+        fetch('/connections/instant/poll')
+            .then(response => response.json())
+            .then(data => {
+                // Look for an entry with status 'accepted' (auto-accepted by SOS) and type 'emergency'
+                const emergency = data.find(req => req.type === 'emergency' && req.status === 'accepted');
+                
+                if (emergency) {
+                    const toast = document.getElementById('emergencyToast');
+                    document.getElementById('emergencyPatientName').textContent = `Patient: ${emergency.patient_name}`;
+                    document.getElementById('emergencyMeetLink').href = emergency.meet_link;
+                    toast.classList.remove('hidden');
+                    
+                    // Optional: Play a sound alert
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3');
+                    audio.play().catch(e => console.log("Audio play blocked by browser"));
+                }
+            })
+            .catch(err => console.error("Emergency Polling Error:", err));
+    }
+
+    function closeEmergencyToast() {
+        document.getElementById('emergencyToast').classList.add('hidden');
+    }
+
+    // Start polling every 3 seconds when the dashboard is open
+    setInterval(pollEmergencies, 3000);
+</script>

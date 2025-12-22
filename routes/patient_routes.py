@@ -8,11 +8,12 @@ from datetime import datetime
 # Security & Database
 from security import get_current_authenticated_user
 from models.schemas import User
-from database import db
+from database import db, user_collection, instant_meetings_collection,notifications_collection
 
 # AI Core
 from ai_core.chatbot_service import MedicalChatbot
 from ai_core.helpers import fetch_patient_context
+from app.services.google_service import create_google_meet_link
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -80,37 +81,61 @@ async def get_wellness_plan(
     )
 
 
-@router.post("/patient/emergency/alert")
+@router.post("/emergency/alert")
 async def alert_doctor(
     request: Request, 
     current_user: User = Depends(get_current_authenticated_user)
 ):
-    try:
-        body = await request.json()
-        location = body.get("location", "GPS Unavailable")
-    except Exception:
-        location = "GPS Unavailable"
+    # 1. Generate Emergency Google Meet Link (SYNCHRONOUS CALL)
+    # We remove 'await' because the function in google_service.py is not async
+    meet_link = create_google_meet_link(
+        summary=f"🚨 SOS EMERGENCY: {current_user.name.first} {current_user.name.last}",
+        start_time=datetime.utcnow(),
+        attendee_emails=[current_user.email]
+    )
 
-    mapping = db.doctor_patient_mappings.find_one({
-        "patient_email": current_user.email
+    # 2. Find a Responder (Registered Doctor or General Physician)
+    # We prioritize doctors in the patient's existing list who are 'available'
+    matched_responder = await user_collection.find_one({
+        "user_type": "doctor",
+        "availability_status": "available",
+        "email": {"$in": current_user.doctor_list if current_user.doctor_list else []}
     })
 
-    doctor_info = "108 (Ambulance)"
+    # If no registered doctor is online, find any available General Physician/Paramedic
+    if not matched_responder:
+        matched_responder = await user_collection.find_one({
+            "user_type": "doctor",
+            "availability_status": "available",
+            "specialization": {"$regex": "General|Paramedic", "$options": "i"}
+        })
 
-    if mapping:
-        doctor_email = mapping.get("doctor_email")
-        doctor_doc = db.users.find_one({"email": doctor_email})
-        
-        if doctor_doc:
-            doctor_name = doctor_doc.get("name", {}).get("first", "Doctor")
-            doctor_phone = doctor_doc.get("phone", "")
-            doctor_info = f"Dr. {doctor_name}"
-            
-            print(f"🚨 EMERGENCY: Patient {current_user.email} @ {location}")
-            print(f"📨 ALERTING: {doctor_info} on {doctor_phone}")
+    if matched_responder:
+        # Create an auto-accepted record so the doctor's dashboard can pop up the alert
+        emergency_request = {
+            "patient_id": str(current_user.id),
+            "doctor_id": str(matched_responder["_id"]),
+            "patient_name": f"{current_user.name.first} {current_user.name.last}",
+            "status": "accepted", # Pre-accepted for SOS
+            "meet_link": meet_link,
+            "created_at": datetime.utcnow(),
+            "type": "emergency"
+        }
+        await instant_meetings_collection.insert_one(emergency_request)
+        notification_entry = {
+            "user_id": str(matched_responder["_id"]),
+            "type": "emergency",
+            "title": "🚨 EMERGENCY SOS",
+            "message": f"Patient {current_user.name.first} has triggered an SOS. Location: GPS Unavailable.",
+            "link": meet_link,
+            "timestamp": datetime.utcnow(),
+            "is_read": False
+        }
+        await notifications_collection.insert_one(notification_entry) #
 
     return {
-        "status": "alert_sent", 
-        "notified": doctor_info,
-        "timestamp": datetime.utcnow().isoformat()
+        "status": "emergency_protocol_initiated",
+        "meet_link": meet_link,
+        "responder_found": True if matched_responder else False
     }
+

@@ -400,3 +400,21 @@ async def reject_instant_request(
 
     return {"message": "Rejected"}
 
+@router.get("/instant/poll")
+async def poll_requests(current_user: User = Depends(get_current_authenticated_user)):
+    if current_user.user_type != "doctor":
+        return []
+    
+    # Fetch active emergency or instant care requests for this doctor
+    # We look for "accepted" (for emergency) or "pending" (for normal instant care)
+    cursor = instant_meetings_collection.find({
+        "doctor_id": str(current_user.id),
+        "status": {"$in": ["pending", "accepted"]}
+    }).sort("created_at", -1).limit(1)
+    
+    requests = await cursor.to_list(length=1)
+    return [
+        {**req, "_id": str(req["_id"])} 
+        for req in requests
+    ]
+

@@ -72,6 +72,13 @@ async def chat_endpoint(
             except Exception as e:
                 print(f"Error resolving patient ID: {e}")
 
+        # routes/ai_routes.py (chat_endpoint improvement)
+        if current_user.user_type == "doctor" and not patient_id:
+            # Do not treat the doctor as a patient. 
+            # Fetch general info or simply set target_email to None
+            context = {"user_doc": current_user.model_dump(), "medical_record": {}}
+            ai_response_text = await chatbot.generate_response(context, query, current_user.model_dump(), is_general=True)
+
         # 2. Generate Response
         context = await fetch_patient_context(target_email)
         

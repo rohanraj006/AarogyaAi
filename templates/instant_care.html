@@ -219,7 +219,7 @@
         }
 
         async function rejectRequest(reqId) {
-            await fetch(`/instant/reject/${reqId}`, {method: 'POST'});
+            await fetch(`/connections/instant/reject/${reqId}`, {method: 'POST'});
             // Reset UI
             document.getElementById('incoming-request-card').classList.add('hidden');
             document.getElementById('doctor-idle-state').classList.remove('hidden');

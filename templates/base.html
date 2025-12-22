@@ -37,7 +37,7 @@
   </script>
 
   <link href="https://fonts.googleapis.com/css2?family=Autour+One&display=swap" rel="stylesheet">
-
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
   
   <script>
@@ -117,6 +117,9 @@
               <a href="/user/profile" class="text-sm text-slate-600 hover:text-indigo-600 transition-colors flex items-center gap-2 group">
                 <span>Hi, <strong class="group-hover:underline">{{ user.name.first if user.name else user.email }}</strong></span>
               </a>
+              <a href="/users/notifications" class="relative p-2 bg-gray-100 hover:bg-gray-200 text-blue-600 rounded-full transition-colors"><i class="fas fa-bell text-xl"></i>
+                  <span id="navNotifDot" class="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full hidden"></span>
+              </a>
               <button id="logoutBtn" class="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors shadow-sm" title="Logout">
                 Logout
               </button>
@@ -192,6 +195,21 @@
       </div>
     </div>
   </div>
+
+  <div id="globalEmergencyToast" class="fixed bottom-5 right-5 z-[9999] hidden">
+    <div class="bg-red-700 text-white p-6 rounded-xl shadow-2xl border-4 border-white max-w-sm animate-pulse">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-xl">🚨 CRITICAL EMERGENCY</h3>
+        </div>
+        <p id="globalSosPatientName" class="mb-4 font-medium"></p>
+        <a id="globalSosMeetLink" href="#" target="_blank" 
+           class="block w-full text-center bg-white text-red-700 font-bold py-3 rounded-lg hover:bg-gray-100 transition-colors">
+            JOIN NOW
+        </a>
+    </div>
+</div>
+
+
   <div class="fixed left-6 bottom-6 z-50">
     <span class="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping"></span>
     
@@ -223,112 +241,236 @@
 
   <script src="{{ url_for('static', path='js/main.js') }}"></script>
   <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        const toggle = document.getElementById('mode-toggle');
-        const statusText = document.getElementById('toggle-status-text');
-
-        if (toggle && statusText && window.APP.currentUser) {
-            // --- 1. INITIALIZATION ---
-            if (window.APP.currentUser.is_public === true) {
-                toggle.checked = true;
-                statusText.textContent = "Public";
-            } else {
-                toggle.checked = false;
-                statusText.textContent = "Private";
-            }
-
-            // --- 2. EVENT LISTENER ---
-            toggle.addEventListener('change', function() {
-                const isPublic = toggle.checked;
-                statusText.textContent = isPublic ? "Public" : "Private";
-
-                fetch('/doctor/toggle_public', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ is_public: isPublic }) 
-                })
-                .then(async res => {
-                    const data = await res.json();
-                    if (res.ok) {
-                        const toast = Swal.mixin({
-                            toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
-                        });
-                        toast.fire({ 
-                            icon: 'success', 
-                            title: isPublic ? 'You are now Visible' : 'You are now Hidden' 
-                        });
-
-                        // --- UPDATED LOGIC: Sync with Instant Care Console ---
-                        if (!isPublic) {
-                            // Find the status badge in instant_care.html if it's currently open
-                            const consoleStatus = document.getElementById('current-status-text');
-                            if (consoleStatus) {
-                                consoleStatus.innerText = "OFFLINE";
-                                // Apply the offline gray styling used in instant_care.html
-                                consoleStatus.className = 'text-sm font-bold uppercase px-3 py-1 rounded transition-colors duration-300 bg-gray-200 text-gray-600';
-                            }
-
-                            // Stop the polling loop if the function exists on this page
-                            if (typeof stopPolling === 'function') {
-                                stopPolling();
-                            }
-                        }
-                    } else {
-                        // Revert on failure
-                        toggle.checked = !isPublic;
-                        statusText.textContent = !isPublic ? "Public" : "Private";
-                        Swal.fire("Error", data.detail || "Could not update status", "error");
-                    }
-                })
-                .catch(err => {
-                    toggle.checked = !isPublic;
-                    statusText.textContent = !isPublic ? "Public" : "Private";
-                });
-            });
-        }
-    });
-
-      // Keep the Emergency Button Logic below
-      const sosBtn = document.getElementById('sosBtn');
-      if (sosBtn) {
-          sosBtn.addEventListener('click', function() {
-              Swal.fire({
-                  title: 'EMERGENCY?',
-                  text: "This will dial 108 and alert your doctor immediately.",
-                  icon: 'warning',
-                  showCancelButton: true,
-                  confirmButtonColor: '#dc2626',
-                  cancelButtonColor: '#6b7280',
-                  confirmButtonText: 'YES, CALL 108',
-                  cancelButtonText: 'Cancel',
-                  focusConfirm: false,
-                  background: '#fff',
-                  backdrop: `rgba(220, 38, 38, 0.4)`
-              }).then((result) => {
-                  if (result.isConfirmed) {
-                      triggerEmergencyProtocol();
-                  }
-              });
-          });
+      /**
+       * 1. GLOBAL NOTIFICATION BADGE LOGIC
+       * Updates the red dot on the bell icon based on unread messages.
+       */
+      async function updateNotificationBadge() {
+          try {
+              const response = await fetch('/users/notifications/data');
+              const notifications = await response.json();
+              
+              // Check if any notification in the list is still unread
+              const hasUnread = notifications.some(n => n.is_read === false);
+              const dot = document.getElementById('navNotifDot');
+              
+              if (dot) {
+                  hasUnread ? dot.classList.remove('hidden') : dot.classList.add('hidden');
+              }
+          } catch (err) {
+              console.error("Error updating badge:", err);
+          }
       }
 
+      /**
+       * 2. EMERGENCY VIEW HANDLING
+       * Tells the backend to stop showing this alert and hides the UI.
+       */
+      async function handleViewNotification(notifId) {
+          if (!notifId) return;
+          
+          try {
+              await fetch(`/users/notifications/read/${notifId}`, { method: 'POST' });
+              
+              // Hide the toast immediately on the frontend
+              const toast = document.getElementById('globalEmergencyToast');
+              if (toast) toast.classList.add('hidden');
+              
+              stopSiren();
+              // Refresh the badge dot
+              updateNotificationBadge();
+          } catch (err) {
+              console.error("Error marking notification as read:", err);
+          }
+      }
+
+      /**
+       * 3. DOCTOR VISIBILITY & GLOBAL POLLING
+       * Handles the public/private toggle and pulls emergency alerts for doctors.
+       */
+      const userType = "{{ user.user_type if user else '' }}";
+
+      function globalPoll() {
+          if (userType !== 'doctor') return;
+
+          // Fetching notification data to check for unread emergencies
+          fetch('/users/notifications/data')
+              .then(res => res.json())
+              .then(data => {
+                  // Find an UNREAD emergency notification assigned to this doctor
+                  const unreadEmergency = data.find(n => n.type === 'emergency' && n.is_read === false);
+                  
+                  const toast = document.getElementById('globalEmergencyToast');
+                  if (unreadEmergency && toast) {
+                      document.getElementById('globalSosPatientName').textContent = unreadEmergency.message;
+                      document.getElementById('globalSosMeetLink').href = unreadEmergency.link;
+                      
+                      // Attach the notification ID so we can mark it read on click
+                      document.getElementById('globalSosMeetLink').dataset.notifId = unreadEmergency._id;
+                      
+                      toast.classList.remove('hidden');
+                      playSiren();
+                  } else if (toast) {
+                      // Hide if no unread emergencies are found
+                      toast.classList.add('hidden');
+                      stopSiren();
+                  }
+              })
+              .catch(err => console.error("Polling error:", err));
+      }
+
+      function playSiren() {
+          if (!window.emergencySiren) {
+              window.emergencySiren = new Audio('https://actions.google.com/sounds/v1/alarms/emergency_siren.ogg');
+              window.emergencySiren.loop = true;
+              window.emergencySiren.play().catch(e => console.log("Audio blocked by browser policies"));
+          }
+      }
+
+      function stopSiren() {
+          if (window.emergencySiren) {
+              window.emergencySiren.pause();
+              window.emergencySiren = null;
+          }
+      }
+
+      /**
+       * 4. PATIENT SOS TRIGGER LOGIC
+       * Includes the 5-second accidental press check.
+       */
       function triggerEmergencyProtocol() {
+          // Immediate call to emergency services
           window.location.href = "tel:108";
+
+          Swal.fire({
+              title: 'Emergency Dispatch Active',
+              text: 'Notifying doctors and establishing a live link...',
+              allowOutsideClick: false,
+              didOpen: () => { Swal.showLoading(); }
+          });
+
           fetch('/patient/emergency/alert', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  timestamp: new Date().toISOString(),
-                  type: 'SOS_BUTTON'
-              })
-          }).then(() => {
-              const toast = document.createElement('div');
-              toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-xl z-[60] font-bold';
-              toast.innerText = 'Doctor Notified!';
-              document.body.appendChild(toast);
-              setTimeout(() => toast.remove(), 3000);
-          }).catch(console.error);
+              body: JSON.stringify({ timestamp: new Date().toISOString() })
+          })
+          .then(res => res.json())
+          .then(data => {
+              if (data.meet_link) {
+                  Swal.fire({
+                      icon: 'success',
+                      title: 'Live Medical Support Found',
+                      html: `A medical responder is joining. <br>Your registered doctor has been alerted via the command center.`,
+                      footer: `<a href="${data.meet_link}" target="_blank" class="px-6 py-2 bg-red-600 text-white rounded-lg font-bold">JOIN EMERGENCY CALL</a>`,
+                      allowOutsideClick: false
+                  });
+              }
+          })
+          .catch(err => {
+              Swal.fire('Alert Error', 'Emergency services notified, but meeting link failed.', 'error');
+          });
       }
+
+      /**
+       * 5. INITIALIZATION & EVENT LISTENERS
+       */
+      document.addEventListener('DOMContentLoaded', () => {
+          // --- Initialize Notification Badge ---
+          updateNotificationBadge();
+          setInterval(updateNotificationBadge, 10000); // Check every 10s
+          
+          // --- Initialize Doctor Polling ---
+          if (userType === 'doctor') {
+              setInterval(globalPoll, 3000); // Check for emergencies every 3s
+          }
+
+          // --- Handle SOS Button ---
+          const sosBtn = document.getElementById('sosBtn');
+          if (sosBtn) {
+              sosBtn.addEventListener('click', function() {
+                  let timerInterval;
+                  Swal.fire({
+                      title: 'EMERGENCY SOS?',
+                      html: 'Alerting emergency services and doctors in <b>5</b> seconds...',
+                      icon: 'warning',
+                      showCancelButton: true,
+                      confirmButtonColor: '#dc2626',
+                      cancelButtonColor: '#6b7280',
+                      confirmButtonText: 'YES, CALL 108 NOW',
+                      cancelButtonText: 'CANCEL',
+                      timer: 5000,
+                      timerProgressBar: true,
+                      didOpen: () => {
+                          const b = Swal.getHtmlContainer().querySelector('b');
+                          timerInterval = setInterval(() => {
+                              b.textContent = Math.ceil(Swal.getTimerLeft() / 1000);
+                          }, 100);
+                      },
+                      willClose: () => { clearInterval(timerInterval); }
+                  }).then((result) => {
+                      if (result.isConfirmed || result.dismiss === Swal.DismissReason.timer) {
+                          triggerEmergencyProtocol();
+                      }
+                  });
+              });
+          }
+
+          // --- Handle Emergency Toast "Join" Click ---
+          const meetLinkBtn = document.getElementById('globalSosMeetLink');
+          if (meetLinkBtn) {
+              meetLinkBtn.addEventListener('click', function() {
+                  handleViewNotification(this.dataset.notifId);
+              });
+          }
+
+          // --- Handle Doctor Visibility Toggle ---
+          const toggle = document.getElementById('mode-toggle');
+          const statusText = document.getElementById('toggle-status-text');
+
+          if (toggle && statusText && window.APP && window.APP.currentUser) {
+              toggle.checked = window.APP.currentUser.is_public === true;
+              statusText.textContent = toggle.checked ? "Public" : "Private";
+
+              toggle.addEventListener('change', function() {
+                  const isPublic = toggle.checked;
+                  statusText.textContent = isPublic ? "Public" : "Private";
+
+                  fetch('/doctor/toggle_public', { 
+                      method: 'POST', 
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ is_public: isPublic }) 
+                  })
+                  .then(async res => {
+                      const data = await res.json();
+                      if (res.ok) {
+                          Swal.mixin({
+                              toast: true, position: 'top-end', showConfirmButton: false, timer: 2000
+                          }).fire({ 
+                              icon: 'success', 
+                              title: isPublic ? 'You are now Visible' : 'You are now Hidden' 
+                          });
+
+                          if (!isPublic) {
+                              const consoleStatus = document.getElementById('current-status-text');
+                              if (consoleStatus) {
+                                  consoleStatus.innerText = "OFFLINE";
+                                  consoleStatus.className = 'text-sm font-bold uppercase px-3 py-1 rounded transition-colors duration-300 bg-gray-200 text-gray-600';
+                              }
+                              if (typeof stopPolling === 'function') stopPolling();
+                          }
+                      } else {
+                          toggle.checked = !isPublic;
+                          statusText.textContent = toggle.checked ? "Public" : "Private";
+                          Swal.fire("Error", data.detail || "Could not update status", "error");
+                      }
+                  })
+                  .catch(() => {
+                      toggle.checked = !isPublic;
+                      statusText.textContent = toggle.checked ? "Public" : "Private";
+                  });
+              });
+          }
+      });
   </script>
 </body>
 </html>

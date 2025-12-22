@@ -203,3 +203,17 @@ async def instant_care_page(
     }
     return templates.TemplateResponse("instant_care.html", context)
 
+@router.get("/users/notifications", response_class=HTMLResponse)
+async def notifications_page(
+    current_user: User = Depends(get_current_authenticated_user),
+    base_context: Dict[str, Any] = Depends(get_base_template_context)
+):
+    """Renders the central notification history page."""
+    context = {
+        "title": "Notifications",
+        "user": current_user,
+        "user_json": current_user.model_dump_json(by_alias=True),
+        **base_context
+    }
+    return templates.TemplateResponse("notifications.html", context)
+

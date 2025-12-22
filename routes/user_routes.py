@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from models.schemas import User, UserCreate, SESSION_COOKIE_NAME, SESSION_EXPIRATION_MINUTES 
 from security import get_password_hash, verify_password, create_user_session, get_current_authenticated_user
-from database import user_collection
+from database import user_collection, notifications_collection, instant_meetings_collection
 import random
 from typing import Literal, Optional
 from datetime import datetime, timezone 
@@ -320,6 +320,38 @@ async def update_user_profile(
 
     return {"message": "Profile updated successfully."}
 
+@router.get("/notifications/data")
+async def get_notifications(current_user=Depends(get_current_authenticated_user)):
+    cursor = notifications_collection.find({"user_id": str(current_user.id)}).sort("timestamp", -1)
+    notifications = await cursor.to_list(length=50)
+    return [
+        {**n, "_id": str(n["_id"]), "timestamp": n["timestamp"].isoformat()} 
+        for n in notifications
+    ]
+
+@router.post("/notifications/read/{notif_id}")
+async def mark_notification_as_read(
+    notif_id: str, 
+    current_user: User = Depends(get_current_authenticated_user)
+):
+    """Marks a specific notification as read so it stops appearing in the UI."""
+    try:
+        # Update the notification in the database
+        result = await notifications_collection.update_one(
+            {"_id": ObjectId(notif_id), "user_id": str(current_user.id)},
+            {"$set": {"is_read": True}}
+        )
+        
+        # Also update the emergency status in instant_meetings if applicable
+        # This prevents the 'Critical Emergency' toast from re-appearing
+        await instant_meetings_collection.update_one(
+            {"doctor_id": str(current_user.id), "type": "emergency", "status": "accepted"},
+            {"$set": {"status": "viewed"}} 
+        )
+
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/logout")
 async def logout_user(response: Response):

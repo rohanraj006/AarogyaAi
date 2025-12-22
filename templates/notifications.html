@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto py-8 px-4">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">Your Notifications</h1>
+        <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full" id="notifCount">0 New</span>
+    </div>
+
+    <div id="notifContainer" class="space-y-4">
+        <div class="text-center py-10 text-gray-500" id="emptyState">
+            <i class="fas fa-bell-slash text-4xl mb-3"></i>
+            <p>No notifications yet.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function loadNotifications() {
+        const response = await fetch('/user/notifications/data');
+        const notifications = await response.json();
+        const container = document.getElementById('notifContainer');
+        const emptyState = document.getElementById('emptyState');
+
+        if (notifications.length > 0) {
+            emptyState.classList.add('hidden');
+            container.innerHTML = notifications.map(n => `
+                <div class="${n.type === 'emergency' ? 'bg-red-50 border-l-4 border-red-500' : 'bg-white border-l-4 border-blue-500'} p-4 rounded-lg shadow-sm flex items-start gap-4 transition-transform hover:scale-[1.01]">
+                    <div class="text-2xl">${n.type === 'emergency' ? '🚨' : '📅'}</div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-bold ${n.type === 'emergency' ? 'text-red-800' : 'text-gray-800'}">${n.title}</h3>
+                            <span class="text-xs text-gray-500">${new Date(n.timestamp).toLocaleString()}</span>
+                        </div>
+                        <p class="text-gray-600 mt-1">${n.message}</p>
+                        ${n.link ? `<a href="${n.link}" target="_blank" class="inline-block mt-3 text-sm font-semibold text-blue-600 hover:underline">View Details / Join →</a>` : ''}
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('notifCount').textContent = `${notifications.length} Total`;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadNotifications);
+</script>
+{% endblock %}

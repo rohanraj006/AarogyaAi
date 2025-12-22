@@ -65,7 +65,7 @@ class MedicalChatbot:
         return formatted_data
 
     # --- MODIFIED: generate_response accepts asking_user ---
-    async def generate_response(self, patient_data: dict, query: str, asking_user: dict) -> str:
+    async def generate_response(self, patient_data: dict, query: str, asking_user: dict, is_general= False) -> str:
         """
         Generates a response using direct context injection.
         Now context-aware: Knows if user is Doctor or Patient.
@@ -90,6 +90,12 @@ class MedicalChatbot:
                 "Your tone should be professional, clinical, and concise. "
                 "Highlight medical insights, potential red flags, and answer the doctor's specific queries strictly based on the data. "
                 "Do NOT invent medical history."
+            )
+        elif asking_user.get("user_type") == "doctor" and is_general:
+            system_instruction = (
+                f"You are Aarogya AI, an assistant helping Dr. {asker_name}. "
+                "You are NOT currently looking at a patient's record. "
+                "Answer general medical questions or help the doctor navigate the platform."
             )
         else:
             system_instruction = (

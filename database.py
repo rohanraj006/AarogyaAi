@@ -23,3 +23,4 @@ appointments_collection = db.appointments
 medical_records_collection = db.medical_records
 report_contents_collection = db.report_contents 
 instant_meetings_collection = db.instant_meetings
+notifications_collection = db.notifications
