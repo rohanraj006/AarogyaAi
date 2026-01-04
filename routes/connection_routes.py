@@ -12,6 +12,7 @@ from database import user_collection, connection_requests_collection, instant_me
 # UPDATED IMPORT: Use rich schema name
 from models.schemas import User, ConnectionRequestModel
 from ai_core.chatbot_service import MedicalChatbot
+from ai_core.helpers import fetch_patient_context
 from app.services.google_service import create_google_meet_link
 
 router = APIRouter()
@@ -301,6 +302,7 @@ async def check_incoming_instant_requests(current_user: User = Depends(get_curre
         "request_id": str(request["_id"]),
         "patient_name": request["patient_name"],
         "symptoms": request["symptoms"],
+        "clinical_snapshot": request.get("clinical_snapshot", "No prior history available"),
         "severity": "High" # Placeholder or derived from AI
     }
 
@@ -353,26 +355,44 @@ async def accept_instant_request(
     meet_link = create_google_meet_link(
         summary=f"Instant Consult: Dr. {current_user.name.last} & {req['patient_name']}",
         start_time=datetime.utcnow(),
-        attendee_emails=[current_user.email] # Add patient email if available in user doc
+        attendee_emails=[current_user.email]
     )
 
-    # 3. Update Database
+    # --------------------------------------------------
+    # 3. FETCH PATIENT + GENERATE CLINICAL SNAPSHOT
+    # --------------------------------------------------
+    patient = await user_collection.find_one({"_id": ObjectId(req["patient_id"])})
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient record not found.")
+
+    patient_context = await fetch_patient_context(patient["email"])
+
+    snapshot = await chatbot.generate_clinical_snapshot(patient_context)
+
+    # --------------------------------------------------
+    # 4. UPDATE DATABASE (ONCE)
+    # --------------------------------------------------
     await instant_meetings_collection.update_one(
         {"_id": ObjectId(request_id)},
         {"$set": {
-            "status": "accepted", 
+            "status": "accepted",
             "meet_link": meet_link,
+            "clinical_snapshot": snapshot,
             "accepted_at": datetime.utcnow()
         }}
     )
-    
-    # 4. Set Doctor to 'In Meeting' (Busy)
+
+    # 5. Mark doctor busy
     await user_collection.update_one(
         {"_id": current_user.id},
         {"$set": {"availability_status": "busy"}}
     )
 
-    return {"message": "Accepted", "meet_link": meet_link}
+    return {
+        "message": "Accepted",
+        "meet_link": meet_link
+    }
+
 
 
 @router.post("/instant/reject/{request_id}", tags=["Instant Care"])
