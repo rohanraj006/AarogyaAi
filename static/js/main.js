@@ -621,6 +621,85 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    // Add this to static/js/main.js inside the DOMContentLoaded listener
+    const searchForm = document.getElementById("patientSearchForm");
+    if (searchForm) {
+        searchForm.addEventListener("submit", async function(e) {
+            e.preventDefault();
+            const aarogyaId = document.getElementById("aarogya_id").value;
+            const resultsContainer = document.getElementById("search-results-container");
+
+            resultsContainer.innerHTML = '<p class="text-center text-gray-500">Searching...</p>';
+
+            try {
+                // 1. Search for the patient details first
+                const searchRes = await fetch(`/doctor/api/patients/search?aarogya_id=${aarogyaId}`);
+                if (!searchRes.ok) {
+                    const errorData = await searchRes.json();
+                    throw new Error(errorData.detail || "Patient not found");
+                }
+                const patient = await searchRes.json();
+
+                // 2. Render the result with a "Send Connection Request" button
+                resultsContainer.innerHTML = `
+                    <div class="bg-white p-6 rounded-2xl shadow-md border border-indigo-100 animate-fade-in">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-900">${patient.name.first} ${patient.name.last}</h3>
+                                <p class="text-sm text-gray-500">ID: ${patient.aarogya_id}</p>
+                                <p class="text-xs text-gray-400 mt-1">Status: Not Connected</p>
+                            </div>
+                            <button id="sendReqBtn" onclick="sendConnectionRequest('${patient.aarogya_id}')" 
+                                    class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition shadow-sm font-semibold">
+                                Send Connection Request
+                            </button>
+                        </div>
+                    </div>`;
+            } catch (err) {
+                resultsContainer.innerHTML = `<p class="text-center text-red-500">${err.message}</p>`;
+            }
+        });
+    }
+
+    /**
+     * Global helper function to trigger the connection request API
+     */
+    window.sendConnectionRequest = async (aarogyaId) => {
+        const btn = document.getElementById('sendReqBtn');
+        
+        Swal.fire({
+            title: 'Sending Request...',
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        try {
+            const response = await fetch(`/connections/request/${aarogyaId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Request Sent',
+                    text: 'The patient will be notified to accept your connection.',
+                    timer: 3000
+                });
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerText = "Request Pending";
+                    btn.classList.replace('bg-indigo-600', 'bg-gray-400');
+                }
+            } else {
+                throw new Error(data.detail || "Failed to send request");
+            }
+        } catch (err) {
+            Swal.fire('Notice', err.message, 'info');
+        }
+    };
+
     // 2. Function to Load Patient Reports (Calls /reports/my-reports)
     window.loadPatientReports = () => {
         if (!patientReportContainer) return;

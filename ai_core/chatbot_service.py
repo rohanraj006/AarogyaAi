@@ -10,9 +10,6 @@ from typing import Dict, Any, Literal, Optional
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-# -----------------------------------------------------------------------------
-# CONFIG
-# -----------------------------------------------------------------------------
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -24,10 +21,6 @@ if API_KEY:
     genai.configure(api_key=API_KEY)
 else:
     logger.warning("GEMINI_API_KEY not found. AI disabled.")
-
-# -----------------------------------------------------------------------------
-# MAIN SERVICE
-# -----------------------------------------------------------------------------
 
 class MedicalChatbot:
     """
@@ -47,10 +40,6 @@ class MedicalChatbot:
                 logger.info(f"Aarogya AI initialized with model: {MODEL_NAME}")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini model: {e}")
-
-    # -------------------------------------------------------------------------
-    # PUBLIC ENTRY POINT (SINGLE SOURCE OF TRUTH)
-    # -------------------------------------------------------------------------
 
     async def generate_response(
         self,
@@ -81,10 +70,6 @@ class MedicalChatbot:
             return await self._patient_own_record(query, patient_context)
 
         return "Invalid request configuration."
-
-    # -------------------------------------------------------------------------
-    # ROLE-SPECIFIC HANDLERS
-    # -------------------------------------------------------------------------
 
     async def _doctor_general(self, query: str, doctor: dict) -> str:
         prompt = f"""
@@ -168,11 +153,7 @@ Patient Question:
 {query}
 """
         return await self._run(prompt)
-
-    # -------------------------------------------------------------------------
-    # SHARED EXECUTOR
-    # -------------------------------------------------------------------------
-
+   
     async def _run(self, prompt: str) -> str:
         try:
             response = await asyncio.to_thread(
@@ -183,10 +164,6 @@ Patient Question:
         except Exception as e:
             logger.error(f"AI generation error: {e}")
             return "An error occurred while generating the response."
-
-    # -------------------------------------------------------------------------
-    # ADDITIONAL FEATURES (UNCHANGED BUT CLEANED)
-    # -------------------------------------------------------------------------
 
     async def summarize_medical_record(self, patient_data: dict) -> str:
         prompt = f"""
@@ -298,4 +275,16 @@ Return ONLY specialization name.
                 Output:
             """
         return await self._run(prompt)
+
+    async def generate_structured_response(self, prompt: str, **kwargs) -> str:
+        """
+        Executes a prompt intended to return structured (JSON) data.
+        """
+        if not self.model:
+            return "{}"
+        
+        # You can reuse the existing _run executor
+        return await self._run(prompt)
+
+
 
